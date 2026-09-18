@@ -58,7 +58,7 @@ test('fresh authoring routes directly to a starter or full schema example withou
   const routes = {
     architecture: ['schemas/architecture.schema.json', 'examples/starter.architecture.json'],
     workflow: ['schemas/workflow.schema.json', 'examples/starter.workflow.json'],
-    sequence: ['schemas/sequence.schema.json', 'examples/starter.sequence.json'],
+    sequence: ['schemas/sequence.schema.json', 'examples/cache-miss-request.sequence.json'],
     dataflow: ['schemas/dataflow.schema.json', 'examples/event-stream.dataflow.json'],
     lifecycle: ['schemas/lifecycle.schema.json', 'examples/deployment-release.lifecycle.json'],
   };

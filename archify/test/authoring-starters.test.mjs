@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-for (const type of ['architecture', 'workflow', 'sequence']) {
+for (const type of ['architecture', 'workflow']) {
   test(`${type} starter passes showcase using current static authoring defaults`, () => {
     const input = path.join(skillRoot, 'examples', `starter.${type}.json`);
     const source = JSON.parse(readFileSync(input, 'utf8'));
