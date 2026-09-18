@@ -896,6 +896,7 @@ test('benchmark documentation locks the fair-run and truthful-evidence contract'
 
 test('packaged skill puts a bounded ordinary-model path before progressive feature references', () => {
   const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
+  const authoringDefaults = fs.readFileSync(path.join(skillRoot, 'references', 'authoring-defaults.md'), 'utf8');
   const authoring = fs.readFileSync(path.join(skillRoot, 'references', 'authoring-contract.md'), 'utf8');
   const viewer = fs.readFileSync(path.join(skillRoot, 'references', 'viewer-runtime.md'), 'utf8');
   assert.match(skill, /## Existing candidate handoff[\s\S]*run `finalize` first as one CLI invocation/);
@@ -908,8 +909,8 @@ test('packaged skill puts a bounded ordinary-model path before progressive featu
   assert.ok(fastPathEnd > fastPath, 'fast authoring path must precede the type router');
   assert.ok(skill.trimEnd().split('\n').length <= 160, 'ordinary authors must not ingest the viewer catalogue');
   for (const required of [
-    'one matching schema',
-    'one matching JSON example',
+    'exact schema and example paths in the Type router',
+    'do not list `schemas/` or `examples/` first',
     'the next tool action must write the candidate',
     'Do not plan exact coordinates in prose',
     'Fresh authorship means new stable IDs, domain wording, and layout',
@@ -917,7 +918,6 @@ test('packaged skill puts a bounded ordinary-model path before progressive featu
     'Start with automatic routes and labels',
     'Do not add `via`, `channelX`, `channelY`, or `labelAt` before a diagnostic',
     'Set `meta.quality_profile` to `"showcase"`',
-    'A recoverable state uses `type: "failure"` plus a real transition back to the active state',
     'after every candidate edit',
     'A frozen existing candidate that has not failed a gate goes straight to `finalize`',
     'A passing final validation freezes the candidate: never edit it afterward',
@@ -937,6 +937,8 @@ test('packaged skill puts a bounded ordinary-model path before progressive featu
       new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
     );
   }
+  assert.match(skill.slice(fastPath, fastPathEnd), /references\/authoring-defaults\.md/);
+  assert.match(authoringDefaults, /A recoverable state uses `type: "failure"` plus a real transition back to the active state/);
   assert.match(authoring, /componentType/);
   assert.match(authoring, /clear gap between boxes, not center distance/i);
   assert.match(viewer, /Direct Relationship Pin/);

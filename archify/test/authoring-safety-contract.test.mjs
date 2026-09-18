@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(__dirname, '..');
 const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
+const authoringDefaults = fs.readFileSync(
+  path.join(skillRoot, 'references', 'authoring-defaults.md'),
+  'utf8',
+);
 const authoringContract = fs.readFileSync(
   path.join(skillRoot, 'references', 'authoring-contract.md'),
   'utf8',
@@ -14,7 +18,8 @@ const authoringContract = fs.readFileSync(
 const schemaReadme = fs.readFileSync(path.join(skillRoot, 'schemas', 'README.md'), 'utf8');
 
 test('semantic relationship labels are preserved and deletion is not a geometry repair', () => {
-  for (const [name, source] of [['SKILL.md', skill], ['authoring contract', authoringContract]]) {
+  assert.match(skill, /references\/authoring-defaults\.md/);
+  for (const [name, source] of [['authoring defaults', authoringDefaults], ['authoring contract', authoringContract]]) {
     assert.match(source, /Relationship labels are semantic data/i, name);
     assert.match(source, /move the label[\s\S]*adjust the route or spacing[\s\S]*shorten/i, name);
     assert.match(source, /protocol[\s\S]*action[\s\S]*direction[\s\S]*synchronous[\s\S]*asynchronous[\s\S]*cross-boundary mechanism/i, name);
@@ -31,10 +36,10 @@ test('schema policy documents the workflow v1/v2 compatibility boundary', () => 
 });
 
 test('deployment ownership stays explicit, fact-backed, and cannot be removed to pass', () => {
-  assert.match(skill, /Omit `meta\.engineering_profile` by default/);
-  assert.match(skill, /Region.*cluster.*security boundar.*do not.*enable/i);
-  assert.match(skill, /production deployment topology.*ownership.*fail-closed deployment review/i);
-  assert.match(skill, /must not remove.*engineering profile.*pass validation/i);
+  assert.match(authoringDefaults, /Omit `meta\.engineering_profile` by default/);
+  assert.match(authoringDefaults, /Region.*cluster.*security boundar.*do not.*enable/i);
+  assert.match(authoringDefaults, /production deployment topology.*ownership.*fail-closed deployment review/i);
+  assert.match(authoringDefaults, /must not remove.*engineering profile.*pass validation/i);
 });
 
 test('browser-check is the capture-free gate while visual-check stays an optional pending capture receipt', () => {
