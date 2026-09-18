@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": { "title": "Request and Event", "locale": "en", "quality_profile": "showcase" },
+  "components": [
+    { "id": "client", "type": "frontend", "label": "Client", "pos": [60, 110], "size": [150, 64] },
+    { "id": "api", "type": "backend", "label": "API", "pos": [310, 110], "size": [150, 64] },
+    { "id": "store", "type": "database", "label": "Store", "pos": [560, 110], "size": [150, 64] },
+    { "id": "events", "type": "messagebus", "label": "Events", "pos": [310, 330], "size": [150, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Service", "wraps": ["api", "store", "events"] }
+  ],
+  "connections": [
+    { "id": "request", "from": "client", "to": "api", "label": "HTTPS" },
+    { "id": "persist", "from": "api", "to": "store", "label": "write" },
+    { "id": "emit", "from": "api", "to": "events", "label": "publish", "variant": "dashed" }
+  ]
+}

@@ -23,16 +23,9 @@ The update check and `finalize` are independent. Once the frozen candidate exist
 Use this bounded path for ordinary generation. Do not read the optional Viewer Runtime reference unless the user asks about those features.
 
 1. Choose `architecture`, `workflow`, `sequence`, `dataflow`, or `lifecycle` from the question.
-2. For a fresh candidate, use the exact schema and example paths in the Type router; do not list `schemas/` or `examples/` first. Read `references/authoring-defaults.md`, that schema, `schemas/common.schema.json`, and that example in the same parallel tool batch. Fresh authorship means new stable IDs, domain wording, and layout; use the example for field shape, not facts. When real product identity matters, query `node bin/archify.mjs brands "<name>" --json`; read `references/brand-marks.md` only for an unknown brand with a user-provided URL.
+2. Use the exact paths in the Type router; do not list `schemas/` or `examples/` first. For Architecture, Workflow, or Sequence, read `references/authoring-defaults.md` and the matching starter example in one parallel tool batch. The starter covers ordinary field shapes; read the mode schema and `schemas/common.schema.json` before using a field absent from it, or when a schema diagnostic needs clarification. For Dataflow and Lifecycle, read defaults, the mode schema, common schema, and example together. Fresh authorship means new stable IDs, domain wording, and layout; use examples for field shape, not facts. When real product identity matters, query `node bin/archify.mjs brands "<name>" --json`; read `references/brand-marks.md` only for an unknown brand with a user-provided URL.
 3. Artifact first: the next tool action must write the candidate. Write the candidate before inspecting renderer internals. Do not plan exact coordinates in prose. Start with one clear main path, short side branches, and sparse labels. Use roughly 12 primary nodes as an initial readability budget. Preserve every node and relationship required by the user's question; for larger diagrams, group related content where the selected schema supports it. Set `meta.quality_profile` to `"showcase"` unless the user explicitly requests a dense `standard` map. Start with automatic routes and labels. Do not add `via`, `channelX`, `channelY`, or `labelAt` before a diagnostic calls for one; test one repair hypothesis per round. When geometry fails or repeats, read the repair order in `references/authoring-contract.md` and inspect measured layout before manual routing: use `validate <type> <candidate.json> --layout-json` for architecture/workflow; for other types, use validation diagnostics and the rendered SVG geometry. Check whether unnecessary agent-added controls disable automatic port spread; preserve user-required route intent. If several edges share a constrained channel, compare a small node-layout change with adding route controls; validate the coupled change together while preserving required nodes, relationships, labels, and boundary membership.
-4. Use standalone validation after every candidate edit that may need another repair. A frozen existing candidate that has not failed a gate goes straight to `finalize`; do not pre-validate it only to repeat the same validation inside `finalize`:
-
-   ```bash
-   node bin/archify.mjs validate <type> <candidate.json> --quality showcase --json
-   ```
-
-   A receipt with only 4 artifact checks is basic validation, never showcase acceptance. A showcase pass must report all 9 artifact checks with 0 composition errors and 0 warnings. If the candidate omits or misspells the exact `meta.quality_profile` field, fix it before geometry. For a workflow v2 geometry diagnosis, run `node bin/archify.mjs validate workflow <candidate.json> --layout-json` and use the stable compiler receipt; solver internals are not authoring controls. A passing final validation freezes the candidate: never edit it afterward. Do not repeat a standalone validation only for handoff; `finalize` begins with the same showcase validation.
-5. For a delivered HTML, `finalize` is the complete acceptance command:
+4. Once the complete first candidate is written, run `finalize` directly. Its first gate is showcase validation; successful first drafts need no separate pre-validation. Keep the candidate unchanged while the command runs:
 
    ```bash
    node bin/archify.mjs finalize <type> <candidate.json> <output.html> --quality showcase --json
@@ -40,7 +33,7 @@ Use this bounded path for ordinary generation. Do not read the optional Viewer R
 
    A passing receipt proves that the included `validate`, `deliver`, strict `check`, and deterministic real-browser `browser-check` gates passed. When a request names those gates or asks that each pass, do not rerun the individual commands afterward; use a standalone command only for an explicitly separate execution or focused failure diagnosis.
 
-   A non-zero exit can never be described as success. If a gate fails, read the reported full receipt, use its diagnosed subjects and measured evidence to choose one repair hypothesis, then rerun. Missing evidence is a reason to inspect layout, not guess a constraint from the message. Compare remaining diagnostic codes and subjects within the same validation stage; a later stage can reveal new issues. If the same issue survives two focused repairs, inspect its measured geometry or the relevant implementation before changing that hypothesis. If it remains unresolved after that investigation and one evidence-based repair, stop and report it truthfully. A lower error count does not justify changing the diagram’s meaning.
+5. A non-zero exit can never be described as success. If a gate fails, read the reported full receipt, use its diagnosed subjects and measured evidence to choose one repair hypothesis, then rerun. Use standalone `validate <type> <candidate.json> --quality showcase --json` during a known repair loop, and `--layout-json` when measured layout is needed. A receipt with only 4 artifact checks is basic validation, never showcase acceptance: require all 9 artifact checks with 0 composition errors and 0 warnings. Fix a missing or misspelled `meta.quality_profile` before geometry. For workflow v2, use the stable compiler receipt; solver internals are not authoring controls. A passing final validation freezes the candidate; run `finalize` once to finish delivery. Missing evidence is a reason to inspect layout, not guess a constraint from the message. Compare remaining diagnostic codes and subjects within the same validation stage; a later stage can reveal new issues. If the same issue survives two focused repairs, inspect its measured geometry or the relevant implementation before changing that hypothesis. If it remains unresolved after that investigation and one evidence-based repair, stop and report it truthfully. A lower error count does not justify changing the diagram’s meaning.
 
 ## Update awareness
 
@@ -55,9 +48,9 @@ Do not read `renderers/shared/geometry.mjs`, renderer source, validator source, 
 
 | Type | Use for | Schema | Example |
 |---|---|---|---|
-| `architecture` | Components, services, cloud/security boundaries, infrastructure | `schemas/architecture.schema.json` | `examples/checkout-platform.base.architecture.json` |
-| `workflow` | Processes, approval gates, tool calls, runbooks, CI/CD | `schemas/workflow.schema.json` | `examples/release-delivery.workflow.json` |
-| `sequence` | API call chains, request lifecycles, async traces, returns | `schemas/sequence.schema.json` | `examples/cache-miss-request.sequence.json` |
+| `architecture` | Components, services, cloud/security boundaries, infrastructure | `schemas/architecture.schema.json` | `examples/starter.architecture.json` |
+| `workflow` | Processes, approval gates, tool calls, runbooks, CI/CD | `schemas/workflow.schema.json` | `examples/starter.workflow.json` |
+| `sequence` | API call chains, request lifecycles, async traces, returns | `schemas/sequence.schema.json` | `examples/starter.sequence.json` |
 | `dataflow` | Pipelines, ETL/ELT, lineage, governance, consumers | `schemas/dataflow.schema.json` | `examples/event-stream.dataflow.json` |
 | `lifecycle` | State/status transitions, retries, waiting and terminal states | `schemas/lifecycle.schema.json` | `examples/deployment-release.lifecycle.json` |
 
@@ -73,7 +66,7 @@ Read Mermaid for topology and meaning, then author fresh Archify JSON; do not me
 
 ## Delivery
 
-Use `validate` during repair. After the final passing validation freezes the candidate, run the complete acceptance path once:
+Run the complete acceptance path directly on a first candidate, or after standalone validation completes a repair loop:
 
 ```bash
 node bin/archify.mjs finalize <type> <candidate.json> <output.html> --quality showcase --json

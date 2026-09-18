@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": { "title": "Request Review", "locale": "en", "quality_profile": "showcase" },
+  "lanes": [
+    { "id": "requester", "label": "Requester" },
+    { "id": "service", "label": "Service" }
+  ],
+  "mainPath": ["request", "review", "execute", "result"],
+  "nodes": [
+    { "id": "request", "lane": "requester", "col": 0, "type": "frontend", "label": "Request" },
+    { "id": "review", "lane": "service", "col": 1, "type": "security", "label": "Review" },
+    { "id": "execute", "lane": "service", "col": 2, "type": "backend", "label": "Execute" },
+    { "id": "result", "lane": "service", "col": 3, "type": "external", "label": "Result" },
+    { "id": "revise", "lane": "requester", "col": 1, "type": "backend", "label": "Revise" }
+  ],
+  "edges": [
+    { "id": "submit", "from": "request", "to": "review", "label": "submit" },
+    { "id": "approve", "from": "review", "to": "execute", "label": "approved" },
+    { "id": "complete", "from": "execute", "to": "result", "label": "complete" },
+    { "id": "change", "from": "review", "to": "revise", "label": "changes", "role": "branch", "variant": "security" },
+    { "id": "retry", "from": "revise", "to": "request", "label": "resubmit", "role": "return", "variant": "dashed" }
+  ]
+}

@@ -53,12 +53,12 @@ test('main skill stays a bounded authoring router with progressive references', 
   }
 });
 
-test('fresh authoring routes directly to one schema and example without directory discovery', () => {
+test('fresh authoring routes directly to a starter or full schema example without directory discovery', () => {
   assert.match(skill, /do not list `schemas\/` or `examples\/` first/i);
   const routes = {
-    architecture: ['schemas/architecture.schema.json', 'examples/checkout-platform.base.architecture.json'],
-    workflow: ['schemas/workflow.schema.json', 'examples/release-delivery.workflow.json'],
-    sequence: ['schemas/sequence.schema.json', 'examples/cache-miss-request.sequence.json'],
+    architecture: ['schemas/architecture.schema.json', 'examples/starter.architecture.json'],
+    workflow: ['schemas/workflow.schema.json', 'examples/starter.workflow.json'],
+    sequence: ['schemas/sequence.schema.json', 'examples/starter.sequence.json'],
     dataflow: ['schemas/dataflow.schema.json', 'examples/event-stream.dataflow.json'],
     lifecycle: ['schemas/lifecycle.schema.json', 'examples/deployment-release.lifecycle.json'],
   };
