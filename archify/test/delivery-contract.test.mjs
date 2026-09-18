@@ -17,7 +17,8 @@ test('ordinary handoff uses one deterministic finalizer without image capability
   assert.match(skill, /run `finalize` first as one CLI invocation/);
   assert.match(skill, /passing receipt completes the ordinary handoff without screenshots or an image-capable model/i);
   assert.match(skill, /archify\.mjs finalize <type> <candidate\.json> <output\.html> --quality showcase --json/);
-  assert.match(skill, /A frozen existing candidate that has not failed a gate goes straight to `finalize`; do not pre-validate it/);
+  assert.match(skill, /When the user supplies a frozen candidate[\s\S]*?run `finalize` first as one CLI invocation/);
+  assert.match(skill, /Once the complete first candidate is written, run `finalize` directly\. Its first gate is showcase validation/);
   assert.doesNotMatch(skill, /node bin\/archify\.mjs deliver <type> <candidate\.json> <output\.html>/);
 
   assert.match(finalizeSection, /`browser-check --require-provenance`/);
