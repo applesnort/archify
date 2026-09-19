@@ -90,7 +90,9 @@ export function hasRepositoryEvidence(diagramType, diagram) {
   return Boolean(diagram?.meta?.repository) || authored.nodes.some((node) => Array.isArray(node?.sources) && node.sources.length);
 }
 
-export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
+// Declaration checks are independent of local Git objects. Keep this helper
+// free of filesystem/Git access; a valid declaration is not verified evidence.
+export function validateRepositoryDeclaration(diagramType, diagram) {
   if (!hasRepositoryEvidence(diagramType, diagram)) return null;
   const { collection, nodes: authoredNodes } = evidenceNodes(diagramType, diagram);
 
@@ -127,6 +129,13 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
       supportedFixes: ['use a canonical GitHub or Gitee URL, or select link_mode: local-only to retain local verification without web links'],
     });
   }
+  return { collection, authoredNodes, repository, location, linkMode };
+}
+
+export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
+  const declaration = validateRepositoryDeclaration(diagramType, diagram);
+  if (!declaration) return null;
+  const { collection, authoredNodes, repository, location, linkMode } = declaration;
   if (!repoRootInput) {
     evidenceFailure('repository-evidence/root-required', 'This diagram declares source evidence. Pass --repo-root <repository> so Archify can verify it before rendering.', {
       subject: { path: '/meta/repository' },

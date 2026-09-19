@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { applyTemplate, renderCards, esc } from './utils.mjs';
 import { validateSchema } from './validator.mjs';
-import { verifyRepositoryEvidence } from './repository-evidence.mjs';
-import { installRendererDiagnosticBoundary, throwDiagnosticError, throwDiagnosticProblems } from './diagnostics.mjs';
+import { validateRepositoryDeclaration, verifyRepositoryEvidence } from './repository-evidence.mjs';
+import { installRendererDiagnosticBoundary, throwDiagnosticError, throwDiagnosticProblems, withDiagnosticRecordingSuppressed } from './diagnostics.mjs';
 import { validateEngineeringProfile } from './engineering-profiles.mjs';
 import { resolveOutputPath } from './output-path.mjs';
 import { prepareDiagramBrandMarks } from './brand-marks.mjs';
@@ -46,8 +46,7 @@ export function loadDiagram({ rendererDir, diagramType, defaultExample, argv = p
       supportedFixes: ['repair the JSON syntax and run validation again'],
     }]);
   }
-  validateSchema(diagramType, diagram);
-  validateGuidedViews(diagramType, diagram);
+  validateAuthoringPrerequisites(diagramType, diagram);
   validateRelationshipIds(diagramType, diagram);
   validateEngineeringProfile(diagramType, diagram);
   const sourceEvidence = verifyRepositoryEvidence(diagramType, diagram, process.env.ARCHIFY_REPO_ROOT);
@@ -129,6 +128,50 @@ const SEMANTIC_COLLECTIONS = {
   dataflow: 'nodes',
   lifecycle: 'states',
 };
+
+function captureClassifiedFailure(validate) {
+  try {
+    withDiagnosticRecordingSuppressed(validate);
+    return null;
+  } catch (error) {
+    // A programming error must retain the existing unclassified boundary.
+    if (!Array.isArray(error?.archifyDiagnostics) || error.archifyDiagnostics.length === 0) throw error;
+    return error;
+  }
+}
+
+function hasOnlyDisplayLengthErrors(diagramType, error) {
+  const collection = SEMANTIC_COLLECTIONS[diagramType];
+  if (!collection) return false;
+  const sourceLabel = new RegExp(`^/${collection}/\\d+/sources/\\d+/label$`);
+  return error.archifyDiagnostics.every((entry) => entry.code === 'schema/maxLength'
+    && (/^\/meta\/views\/\d+\/(?:label|note)$/.test(entry.subject?.path)
+      || sourceLabel.test(entry.subject?.path)));
+}
+
+function validateAuthoringPrerequisites(diagramType, diagram) {
+  const schemaError = captureClassifiedFailure(() => validateSchema(diagramType, diagram));
+  // The generated validator uses allErrors. Only these display fields may be
+  // invalid before pure cross-field checks; all structural failures still stop.
+  if (schemaError && !hasOnlyDisplayLengthErrors(diagramType, schemaError)) throw schemaError;
+  const guidedError = captureClassifiedFailure(() => validateGuidedViews(diagramType, diagram));
+  if (!schemaError && !guidedError) return;
+
+  const declarationError = captureClassifiedFailure(() => validateRepositoryDeclaration(diagramType, diagram));
+  const errors = [schemaError, guidedError, declarationError].filter(Boolean);
+  const diagnostics = [];
+  const seen = new Set();
+  for (const error of errors) {
+    for (const entry of error.archifyDiagnostics) {
+      const key = JSON.stringify([entry.code, entry.subject, entry.message]);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      diagnostics.push(entry);
+    }
+  }
+  // Always fail before templates, brand capture, Git verification or layout.
+  throwDiagnosticError(errors[0].message, diagnostics);
+}
 
 const RELATIONSHIP_COLLECTIONS = {
   architecture: 'connections',

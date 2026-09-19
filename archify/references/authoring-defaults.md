@@ -11,6 +11,8 @@ When the diagram reflects a real repository, finish the evidence shape while ins
 "components": [{ "id": "runtime", "sources": [{ "path": "src/runtime.ts", "line": 1, "label": "runtime entry" }] }]
 ```
 
+For local-only source links or an unsupported forge, set `meta.repository.link_mode` to `"local-only"` and retain `url` and `revision`. This disables web hyperlinks while preserving local identity and source verification.
+
 Keep `<repo-root>` from source inspection and pass it to the first `finalize` call. Do not omit a required role or merge distinct responsibilities merely to reduce layout work.
 
 A source reference proves only the implementation visible at that location. When separate files or locations establish materially different relationships, protocols, lifecycle transitions, persistence behavior, or conclusion-card claims, attach those inspected locations to the relevant semantic node. Let the real claims determine the references; never target a total reference count or reuse one citation as a proxy for evidence it does not contain.
