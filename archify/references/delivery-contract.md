@@ -112,7 +112,7 @@ node bin/archify.mjs deliver <type> <candidate.json> <output.html> --quality sho
 
 Deliver reads the specification once, writes those exact bytes to a private same-directory candidate snapshot, renders that snapshot, runs the complete artifact checker, and only replaces the target after all artifact checks pass. The JSON receipt includes SHA-256 and byte counts for both `specification` and `artifact`.
 
-For the ordinary agent handoff path, prefer the serial finalizer:
+For the ordinary agent handoff path, prefer the finalizer:
 
 ```bash
 node bin/archify.mjs finalize <type> <candidate.json> <output.html> --quality showcase --json
@@ -142,6 +142,14 @@ The individual commands remain authoritative and backward compatible. Use
 them directly for focused diagnosis, recovery, or when only one gate is
 required. A finalize failure does not relax any gate and does not turn a
 preserved older artifact into a current successful delivery.
+
+`finalize` overlaps private Chrome startup with delivery and strict checking.
+It loads the artifact only after those gates pass and current provenance is
+verified. The browser gate retains every viewport, theme, and stability check;
+the browser closes at completion or an earlier failure. Its full stage receipt
+records `execution: "in-process"` and the equivalent standalone `command` for
+replay. Use total finalize duration to compare performance because Chrome
+startup overlaps the earlier stages.
 
 The pair commit is recoverable, not a claim that two filesystem paths change
 atomically or are durable across power loss. Journal finalization is part of

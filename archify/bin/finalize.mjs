@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,6 +7,8 @@ import { pathsAlias } from '../renderers/shared/output-path.mjs';
 import {
   browserCheckSidecarPaths,
   CAPTURE_VIEWPORTS,
+  ChromeVisualBrowser,
+  findChrome,
   THEMES,
   VISUAL_CHECK_VIEWPORTS,
 } from './visual-check.mjs';
@@ -330,10 +332,15 @@ function browserEvidence(receipt, artifactPath) {
 }
 
 function defaultRunner({ cliPath, args, cwd, env }) {
-  return spawnSync(process.execPath, [cliPath, ...args], {
-    cwd,
-    env,
-    encoding: 'utf8',
+  return new Promise((resolve) => {
+    execFile(process.execPath, [cliPath, ...args], { cwd, env, encoding: 'utf8' }, (error, stdout, stderr) => {
+      resolve({
+        status: error ? (Number.isInteger(error.code) ? error.code : 1) : 0,
+        stdout,
+        stderr,
+        ...(error ? { error, signal: error.signal } : {}),
+      });
+    });
   });
 }
 
@@ -452,7 +459,7 @@ export function compactFinalizeReceipt(receipt) {
   return compact;
 }
 
-export function runFinalize({
+export async function runFinalize({
   cliPath,
   type,
   input,
@@ -465,6 +472,9 @@ export function runFinalize({
   cwd = process.cwd(),
   env = process.env,
   runCommand = defaultRunner,
+  runBrowserCheck,
+  resolveChrome = findChrome,
+  createBrowser = (chromePath, options) => new ChromeVisualBrowser(chromePath, options),
 } = {}) {
   if (!cliPath || !type || !input || !output) throw new Error('finalize requires cliPath, type, input, and output.');
   const started = process.hrtime.bigint();
@@ -523,131 +533,172 @@ export function runFinalize({
   };
   persistReceipts();
 
-  let exitCode = 0;
-  for (const stage of ['deliver', 'check', 'browser-check']) {
-    const stageStarted = process.hrtime.bigint();
-    const args = stageArguments({
-      stage,
-      type,
-      input: resolvedInput,
-      output: resolvedOutput,
-      quality,
-      repoRoot,
-      outDir: resolvedOutDir,
-    });
-    const result = runCommand({ stage, cliPath, args, cwd, env });
-    const stageReceipt = parsedReceipt(result.stdout);
-    const code = result.status ?? 1;
-    let status = stageStatus(stage, code, stageReceipt, quality);
-    let stageDiagnostics;
-    const command = [process.execPath, cliPath, ...args];
-    const elapsed = durationMs(stageStarted);
-    if (status === 'pass') {
-      const deliveryReceipt = stage === 'deliver' ? stageReceipt : receipt.stages.deliver?.receipt;
-      const bindingDiagnostic = stageBindingDiagnostic({
+  // Only launch/attach the blank browser here. The normal browser gate still
+  // verifies current delivery provenance before it consumes this one-shot factory.
+  const chromePath = runBrowserCheck ? resolveChrome({ env }) : null;
+  let browser;
+  let browserStartupError;
+  let browserTransferred = false;
+  if (chromePath) {
+    try {
+      browser = createBrowser(chromePath, { env });
+      // Deliver/check may fail before inspect() awaits startup. Handle the
+      // rejection now while retaining the same promise for the browser gate.
+      browser.sessionPromise.catch(() => {});
+    } catch (error) {
+      browserStartupError = error;
+    }
+  }
+  const browserFactory = () => {
+    if (browserStartupError) throw browserStartupError;
+    if (browserTransferred || !browser) throw new Error('The finalize browser is unavailable or already consumed.');
+    browserTransferred = true;
+    return browser;
+  };
+
+  try {
+    let exitCode = 0;
+    for (const stage of ['deliver', 'check', 'browser-check']) {
+      const stageStarted = process.hrtime.bigint();
+      const args = stageArguments({
         stage,
-        receipt: stageReceipt,
+        type,
+        input: resolvedInput,
+        output: resolvedOutput,
+        quality,
+        repoRoot,
+        outDir: resolvedOutDir,
+      });
+      const inProcess = stage === 'browser-check' && runBrowserCheck;
+      let result;
+      if (inProcess) {
+        const checked = await runBrowserCheck({
+          artifactPath: resolvedOutput,
+          outDir: resolvedOutDir,
+          chromePath,
+          resolveChrome: () => chromePath,
+          browserFactory,
+        });
+        result = { status: checked.exitCode, stdout: JSON.stringify(checked.receipt) };
+      } else {
+        result = await runCommand({ stage, cliPath, args, cwd, env });
+      }
+      const stageReceipt = parsedReceipt(result.stdout);
+      const code = result.status ?? 1;
+      let status = stageStatus(stage, code, stageReceipt, quality);
+      let stageDiagnostics;
+      const command = [process.execPath, cliPath, ...args];
+      const elapsed = durationMs(stageStarted);
+      if (status === 'pass') {
+        const deliveryReceipt = stage === 'deliver' ? stageReceipt : receipt.stages.deliver?.receipt;
+        const bindingDiagnostic = stageBindingDiagnostic({
+          stage,
+          receipt: stageReceipt,
+          expectedArtifact: deliveryReceipt?.artifact,
+          expectedReceiptId: deliveryReceipt?.receiptId,
+          output: resolvedOutput,
+          specification,
+          type,
+          deliveryValidation: deliveryReceipt?.validation,
+        });
+        if (bindingDiagnostic) stageDiagnostics = [bindingDiagnostic];
+      }
+      if (stageDiagnostics) {
+        status = 'fail';
+      }
+      const stageEntry = {
+        status,
+        exitCode: code,
+        durationMs: elapsed,
+        command,
+        ...(inProcess ? { execution: 'in-process' } : {}),
+        ...(stageReceipt ? { receipt: stageReceipt } : {}),
+        ...(!stageReceipt && String(result.stdout || '').trim() ? { stdout: String(result.stdout).trim() } : {}),
+        ...(String(result.stderr || '').trim() ? { stderr: String(result.stderr).trim() } : {}),
+        ...(result.signal ? { signal: result.signal } : {}),
+      };
+
+      if (stage === 'deliver' && status === 'pass') {
+        receipt.stages.validate = {
+          status: 'pass',
+          exitCode: 0,
+          durationMs: null,
+          execution: 'embedded-in-deliver',
+          command,
+          receipt: {
+            schemaVersion: 1,
+            ok: true,
+            command: 'validate',
+            specification: stageReceipt.specification,
+            validation: stageReceipt.validation,
+          },
+        };
+        receipt.stages.deliver = stageEntry;
+      } else if (stage === 'deliver') {
+        const validationFailed = stageDiagnostics?.some((diagnostic) => diagnostic.code === 'finalize/candidate-changed-during-delivery')
+          || ['input', 'render', 'check'].includes(stageReceipt?.stage);
+        receipt.stages.validate = validationFailed ? {
+          ...stageEntry,
+          status: 'fail',
+          durationMs: null,
+          execution: 'embedded-in-deliver',
+        } : { status: 'not-run', execution: 'embedded-in-deliver' };
+        receipt.stages.deliver = validationFailed
+          ? { status: 'not-run', execution: 'blocked-by-validate' }
+          : stageEntry;
+      } else {
+        receipt.stages[stage] = stageEntry;
+      }
+
+      if (stage === 'deliver' && stageReceipt?.artifact) receipt.artifact = {
+        path: resolvedOutput,
+        ...stageReceipt.artifact,
+      };
+      if (stage === 'browser-check') {
+        receipt.evidence = {
+          receipt: resolvedReceipt,
+          summaryReceipt: resolvedSummary,
+          ...browserEvidence(stageReceipt, resolvedOutput),
+        };
+      }
+
+      if (status !== 'pass') {
+        exitCode = status === 'skipped' ? 2 : (code || 1);
+        receipt.status = status;
+        receipt.diagnostics = stageDiagnostics || failureDiagnostics(stage, result, stageReceipt, quality);
+        receipt.failedStage = stage === 'deliver'
+          && receipt.stages.validate.status === 'fail' ? 'validate' : stage;
+        break;
+      }
+      persistReceipts();
+    }
+
+    receipt.ok = exitCode === 0;
+    receipt.status = receipt.ok ? 'pass' : receipt.status === 'running' ? 'fail' : receipt.status;
+    if (receipt.ok) {
+      const deliveryReceipt = receipt.stages.deliver?.receipt;
+      const diagnostic = finalArtifactDiagnostic({
+        output: resolvedOutput,
         expectedArtifact: deliveryReceipt?.artifact,
         expectedReceiptId: deliveryReceipt?.receiptId,
-        output: resolvedOutput,
-        specification,
         type,
-        deliveryValidation: deliveryReceipt?.validation,
       });
-      if (bindingDiagnostic) stageDiagnostics = [bindingDiagnostic];
+      if (diagnostic) {
+        exitCode = 1;
+        receipt.ok = false;
+        receipt.status = 'fail';
+        receipt.failedStage = 'finalize';
+        receipt.diagnostics = [diagnostic];
+      }
     }
-    if (stageDiagnostics) {
-      status = 'fail';
-    }
-    const stageEntry = {
-      status,
-      exitCode: code,
-      durationMs: elapsed,
-      command,
-      ...(stageReceipt ? { receipt: stageReceipt } : {}),
-      ...(!stageReceipt && String(result.stdout || '').trim() ? { stdout: String(result.stdout).trim() } : {}),
-      ...(String(result.stderr || '').trim() ? { stderr: String(result.stderr).trim() } : {}),
-      ...(result.signal ? { signal: result.signal } : {}),
-    };
-
-    if (stage === 'deliver' && status === 'pass') {
-      receipt.stages.validate = {
-        status: 'pass',
-        exitCode: 0,
-        durationMs: null,
-        execution: 'embedded-in-deliver',
-        command,
-        receipt: {
-          schemaVersion: 1,
-          ok: true,
-          command: 'validate',
-          specification: stageReceipt.specification,
-          validation: stageReceipt.validation,
-        },
-      };
-      receipt.stages.deliver = stageEntry;
-    } else if (stage === 'deliver') {
-      const validationFailed = stageDiagnostics?.some((diagnostic) => diagnostic.code === 'finalize/candidate-changed-during-delivery')
-        || ['input', 'render', 'check'].includes(stageReceipt?.stage);
-      receipt.stages.validate = validationFailed ? {
-        ...stageEntry,
-        status: 'fail',
-        durationMs: null,
-        execution: 'embedded-in-deliver',
-      } : { status: 'not-run', execution: 'embedded-in-deliver' };
-      receipt.stages.deliver = validationFailed
-        ? { status: 'not-run', execution: 'blocked-by-validate' }
-        : stageEntry;
-    } else {
-      receipt.stages[stage] = stageEntry;
-    }
-
-    if (stage === 'deliver' && stageReceipt?.artifact) receipt.artifact = {
-      path: resolvedOutput,
-      ...stageReceipt.artifact,
-    };
-    if (stage === 'browser-check') {
-      receipt.evidence = {
-        receipt: resolvedReceipt,
-        summaryReceipt: resolvedSummary,
-        ...browserEvidence(stageReceipt, resolvedOutput),
-      };
-    }
-
-    if (status !== 'pass') {
-      exitCode = status === 'skipped' ? 2 : (code || 1);
-      receipt.status = status;
-      receipt.diagnostics = stageDiagnostics || failureDiagnostics(stage, result, stageReceipt, quality);
-      receipt.failedStage = stage === 'deliver'
-        && receipt.stages.validate.status === 'fail' ? 'validate' : stage;
-      break;
-    }
+    receipt.artifact = receipt.ok
+      ? { path: resolvedOutput, ...receipt.stages.deliver.receipt.artifact }
+      : identity(resolvedOutput);
+    receipt.finishedAt = new Date().toISOString();
+    receipt.durationMs = durationMs(started);
     persistReceipts();
+    return { exitCode, receipt, summary: compactFinalizeReceipt(receipt) };
+  } finally {
+    if (browser && !browserTransferred) await browser.close();
   }
-
-  receipt.ok = exitCode === 0;
-  receipt.status = receipt.ok ? 'pass' : receipt.status === 'running' ? 'fail' : receipt.status;
-  if (receipt.ok) {
-    const deliveryReceipt = receipt.stages.deliver?.receipt;
-    const diagnostic = finalArtifactDiagnostic({
-      output: resolvedOutput,
-      expectedArtifact: deliveryReceipt?.artifact,
-      expectedReceiptId: deliveryReceipt?.receiptId,
-      type,
-    });
-    if (diagnostic) {
-      exitCode = 1;
-      receipt.ok = false;
-      receipt.status = 'fail';
-      receipt.failedStage = 'finalize';
-      receipt.diagnostics = [diagnostic];
-    }
-  }
-  receipt.artifact = receipt.ok
-    ? { path: resolvedOutput, ...receipt.stages.deliver.receipt.artifact }
-    : identity(resolvedOutput);
-  receipt.finishedAt = new Date().toISOString();
-  receipt.durationMs = durationMs(started);
-  persistReceipts();
-  return { exitCode, receipt, summary: compactFinalizeReceipt(receipt) };
 }

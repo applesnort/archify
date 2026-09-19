@@ -2417,17 +2417,9 @@ function commandCheck(args) {
   if (result.status !== 0) process.exitCode = result.status ?? 1;
 }
 
-async function commandBrowserEvidence(rawArgs, { command, capture }) {
-  const { rest: args, outDir } = extractOutDirArgs(rawArgs);
-  const json = args.includes('--json');
-  const requireProvenance = args.includes('--require-provenance');
-  const knownOptions = new Set(['--json', '--require-provenance']);
-  const unknown = args.filter((arg) => arg.startsWith('--') && !knownOptions.has(arg));
-  if (unknown.length) fail(`Unknown ${command} option "${unknown[0]}".`, 1);
-  const positional = args.filter((arg) => !knownOptions.has(arg));
-  if (positional.length !== 1) fail(usage(), 1);
-
-  const artifactPath = path.resolve(positional[0]);
+async function executeBrowserEvidence({
+  artifactPath, outDir, requireProvenance, command, capture, ...browserOptions
+}) {
   const provenance = inspectArtifactDeliveryProvenance(artifactPath, requireProvenance);
   let runEvidence;
   let persistFailure;
@@ -2444,19 +2436,14 @@ async function commandBrowserEvidence(rawArgs, { command, capture }) {
     const receipt = persistFailure(artifactPath,
       provenanceFailureReceipt({ command, artifactPath, provenance }),
       { outDir });
-    if (json) console.log(JSON.stringify(receipt, null, 2));
-    else {
-      console.error(formatDiagnostics(`automated browser evidence failed: ${receipt.error}`, receipt.diagnostics));
-      console.error(capture ? 'perceptual visual review pending' : 'perceptual visual review not requested');
-    }
-    process.exitCode = 1;
-    return;
+    return { exitCode: 1, receipt, inputFailure: true };
   }
 
   let result;
   try {
     result = await runEvidence({
-      artifactPath: positional[0],
+      ...browserOptions,
+      artifactPath,
       outDir,
       ...(provenance ? { deliveryProvenance: provenance } : {}),
       verifyArtifact: (bytes) => {
@@ -2481,23 +2468,42 @@ async function commandBrowserEvidence(rawArgs, { command, capture }) {
           provenance: provenance.status,
           ...(provenance.receiptId ? { deliveryReceiptId: provenance.receiptId } : {}),
         } : {}),
-        artifact: { path: path.resolve(positional[0]) },
+        artifact: { path: artifactPath },
         error: error.message,
         diagnostics: [diagnostic({
           code: `viewer/${command}-input`,
           message: `${command} could not read a valid HTML input or prepare its evidence files.`,
-          subject: { artifact: path.resolve(positional[0]) },
+          subject: { artifact: artifactPath },
           evidence: { reason: error.message, ...(error.code ? { systemCode: error.code } : {}) },
           supportedFixes: ['provide an existing readable .html artifact and a writable directory for evidence files'],
         })],
       }, { outDir });
-    if (json) {
-      console.log(JSON.stringify(failure, null, 2));
-    } else {
-      console.error(formatDiagnostics(`automated browser evidence failed: ${failure.error}`, failure.diagnostics));
+    return { exitCode: 1, receipt: failure, inputFailure: true };
+  }
+
+  return result;
+}
+
+async function commandBrowserEvidence(rawArgs, { command, capture }) {
+  const { rest: args, outDir } = extractOutDirArgs(rawArgs);
+  const json = args.includes('--json');
+  const requireProvenance = args.includes('--require-provenance');
+  const knownOptions = new Set(['--json', '--require-provenance']);
+  const unknown = args.filter((arg) => arg.startsWith('--') && !knownOptions.has(arg));
+  if (unknown.length) fail(`Unknown ${command} option "${unknown[0]}".`, 1);
+  const positional = args.filter((arg) => !knownOptions.has(arg));
+  if (positional.length !== 1) fail(usage(), 1);
+
+  const artifactPath = path.resolve(positional[0]);
+  const result = await executeBrowserEvidence({ artifactPath, outDir, requireProvenance, command, capture });
+
+  if (result.inputFailure) {
+    if (json) console.log(JSON.stringify(result.receipt, null, 2));
+    else {
+      console.error(formatDiagnostics(`automated browser evidence failed: ${result.receipt.error}`, result.receipt.diagnostics));
       console.error(capture ? 'perceptual visual review pending' : 'perceptual visual review not requested');
     }
-    process.exitCode = 1;
+    process.exitCode = result.exitCode;
     return;
   }
 
@@ -2636,7 +2642,7 @@ async function commandFinalize(rawArgs) {
 
   let result;
   try {
-    result = runFinalize({
+    result = await runFinalize({
       cliPath: fileURLToPath(import.meta.url),
       type,
       input,
@@ -2646,6 +2652,9 @@ async function commandFinalize(rawArgs) {
       candidateSha256: candidateArgs.candidateSha256,
       outDir: outDirArgs.outDir,
       receiptPath: receiptArgs.receiptPath,
+      runBrowserCheck: options => executeBrowserEvidence({
+        ...options, command: 'browser-check', capture: false, requireProvenance: true,
+      }),
     });
   } catch (error) {
     const failure = {
