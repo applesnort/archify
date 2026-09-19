@@ -6,6 +6,8 @@ import { parseRepositoryRemote, redactRepositoryRemote, repositorySourceHref } f
 
 const FULL_SHA_RE = /^[a-f0-9]{40}$/i;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
+const GIT_MAX_BUFFER = 16 * 1024 * 1024;
+const BATCH_FRAME_OVERHEAD = 256;
 
 function evidenceFailure(code, message, { subject = {}, evidence = {}, supportedFixes = [] } = {}) {
   throwDiagnosticError(message, [{
@@ -18,17 +20,68 @@ function evidenceFailure(code, message, { subject = {}, evidence = {}, supported
   }]);
 }
 
+function gitUnavailable(error) {
+  evidenceFailure('repository-evidence/git-unavailable', `Could not run Git: ${error.message}`, {
+    evidence: { reason: error.message },
+    supportedFixes: ['install Git and ensure it is available on PATH'],
+  });
+}
+
 function runGit(repoRoot, args) {
   // 固定 SHA 的来源必须读取原始对象，不能使用本地 replacement refs 的替换内容。
   const result = spawnSync('git', ['--no-replace-objects', '-C', repoRoot, ...args], {
-    encoding: 'utf8',
-    maxBuffer: 16 * 1024 * 1024,
+    encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER,
   });
-  if (result.error) evidenceFailure('repository-evidence/git-unavailable', `Could not run Git: ${result.error.message}`, {
-    evidence: { reason: result.error.message },
-    supportedFixes: ['install Git and ensure it is available on PATH'],
-  });
+  if (result.error) gitUnavailable(result.error);
   return result;
+}
+
+function runGitRaw(repoRoot, args, input) {
+  return spawnSync('git', ['--no-replace-objects', '-C', repoRoot, ...args], {
+    input, encoding: null, maxBuffer: GIT_MAX_BUFFER + BATCH_FRAME_OVERHEAD,
+  });
+}
+
+function parseBatchResponse(output, requestedObject) {
+  if (!Buffer.isBuffer(output)) return { kind: 'unreadable' };
+  const headerEnd = output.indexOf(0x0a);
+  if (headerEnd < 0) return { kind: 'unreadable' };
+  const headerBytes = output.subarray(0, headerEnd);
+  if (typeof requestedObject === 'string') {
+    for (const status of ['missing', 'ambiguous', 'not-found']) {
+      if (headerBytes.equals(Buffer.from(`${requestedObject} ${status}`, 'utf8'))) return { kind: 'missing', status };
+    }
+  }
+  const match = headerBytes.toString('ascii').match(/^([0-9a-f]{40}(?:[0-9a-f]{24})?) (blob|tree|commit|tag) ([0-9]+)$/);
+  if (!match) return { kind: 'unreadable' };
+  const [, resolvedObject, type, sizeText] = match;
+  const size = Number(sizeText);
+  if (!Number.isSafeInteger(size) || size < 0) return { kind: 'unreadable' };
+  if (type !== 'blob') return { kind: 'missing', status: type, resolvedObject, size };
+  if (size > GIT_MAX_BUFFER + BATCH_FRAME_OVERHEAD || size > GIT_MAX_BUFFER) return { kind: 'legacy' };
+  const contentStart = headerEnd + 1;
+  const contentEnd = contentStart + size;
+  if (contentEnd >= output.length || output[contentEnd] !== 0x0a || contentEnd + 1 !== output.length) return { kind: 'unreadable' };
+  return { kind: 'blob', content: output.subarray(contentStart, contentEnd) };
+}
+
+function runGitLegacyTypeAndShow(repoRoot, object) {
+  const type = runGit(repoRoot, ['cat-file', '-t', object]);
+  if (type.status !== 0 || type.stdout.trim() !== 'blob') return { kind: 'missing' };
+  const content = runGit(repoRoot, ['show', object]);
+  if (content.status !== 0) return { kind: 'unreadable' };
+  return { kind: 'blob', content: Buffer.from(content.stdout, 'utf8') };
+}
+
+function runGitBatchBlob(repoRoot, object) {
+  const result = runGitRaw(repoRoot, ['cat-file', '--batch'], Buffer.from(`${object}\n`, 'utf8'));
+  if (result.error) {
+    if (result.error.code === 'ENOBUFS') return runGitLegacyTypeAndShow(repoRoot, object);
+    gitUnavailable(result.error);
+  }
+  if (result.status !== 0) return runGitLegacyTypeAndShow(repoRoot, object);
+  const parsed = parseBatchResponse(result.stdout, object);
+  return parsed.kind === 'legacy' ? runGitLegacyTypeAndShow(repoRoot, object) : parsed;
 }
 
 function gitValue(repoRoot, args, failure) {
@@ -223,15 +276,31 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
       const object = `${revision}:${source.path}`;
       let metadata = sourceMetadata.get(object);
       if (!metadata) {
-        const type = runGit(realRoot, ['cat-file', '-t', object]);
-        if (type.status !== 0 || type.stdout.trim() !== 'blob') {
-          evidenceFailure('repository-evidence/file-missing', `${where} does not identify a file at revision ${revision}.`, {
-            subject: { path: where, ...nodeSubject },
-            evidence: { sourcePath: source.path, revision },
-            supportedFixes: ['use a file path that exists at the pinned revision'],
-          });
+        if (source.line) {
+          const batch = runGitBatchBlob(realRoot, object);
+          if (batch.kind === 'missing') {
+            evidenceFailure('repository-evidence/file-missing', `${where} does not identify a file at revision ${revision}.`, {
+              subject: { path: where, ...nodeSubject }, evidence: { sourcePath: source.path, revision },
+              supportedFixes: ['use a file path that exists at the pinned revision'],
+            });
+          }
+          if (batch.kind !== 'blob') {
+            evidenceFailure('repository-evidence/file-unreadable', `${where} could not be read at revision ${revision}.`, {
+              subject: { path: where, ...nodeSubject }, evidence: { sourcePath: source.path, revision },
+              supportedFixes: ['verify the pinned blob is readable in the local checkout'],
+            });
+          }
+          metadata = { lineCount: sourceLineCount(batch.content.toString('utf8')) };
+        } else {
+          const type = runGit(realRoot, ['cat-file', '-t', object]);
+          if (type.status !== 0 || type.stdout.trim() !== 'blob') {
+            evidenceFailure('repository-evidence/file-missing', `${where} does not identify a file at revision ${revision}.`, {
+              subject: { path: where, ...nodeSubject }, evidence: { sourcePath: source.path, revision },
+              supportedFixes: ['use a file path that exists at the pinned revision'],
+            });
+          }
+          metadata = { lineCount: undefined };
         }
-        metadata = { lineCount: undefined };
         sourceMetadata.set(object, metadata);
       }
       if (source.line && metadata.lineCount === undefined) {

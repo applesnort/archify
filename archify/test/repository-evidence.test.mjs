@@ -718,3 +718,89 @@ test('live preview forwards repo-root and publishes only verified evidence', { t
     await preview.stop();
   }
 });
+
+
+test('repository evidence batches only an uncached first line-bearing source', () => {
+  const data = fixture();
+  data.diagram.components[0].sources = [{ path: 'src/router.js', line: 1 }];
+  fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+  const trace = path.join(data.root, 'git-first-line.jsonl');
+  const result = spawnSync(process.execPath, [cli, 'validate', 'architecture', data.input, '--repo-root', data.root, '--json'], {
+    cwd: skillRoot, encoding: 'utf8', env: { ...process.env, GIT_TRACE2_EVENT: trace },
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const commands = fs.readFileSync(trace, 'utf8').trim().split('\n').map(JSON.parse)
+    .filter((entry) => entry.event === 'start').map((entry) => entry.argv.slice(1));
+  assert.deepEqual(commands.slice(3), [['--no-replace-objects', '-C', fs.realpathSync(data.root), 'cat-file', '--batch']]);
+
+  data.diagram.components[0].sources = [{ path: 'src/router.js' }, { path: 'src/router.js', line: 1 }];
+  fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+  const lazyTrace = path.join(data.root, 'git-path-only.jsonl');
+  const lazy = spawnSync(process.execPath, [cli, 'validate', 'architecture', data.input, '--repo-root', data.root, '--json'], {
+    cwd: skillRoot, encoding: 'utf8', env: { ...process.env, GIT_TRACE2_EVENT: lazyTrace },
+  });
+  assert.equal(lazy.status, 0, lazy.stderr || lazy.stdout);
+  const lazyCommands = fs.readFileSync(lazyTrace, 'utf8').trim().split('\n').map(JSON.parse)
+    .filter((entry) => entry.event === 'start').map((entry) => entry.argv.slice(1));
+  assert.deepEqual(lazyCommands.slice(3), [
+    ['--no-replace-objects', '-C', fs.realpathSync(data.root), 'cat-file', '-t', `${data.revision}:src/router.js`],
+    ['--no-replace-objects', '-C', fs.realpathSync(data.root), 'show', `${data.revision}:src/router.js`],
+  ]);
+});
+
+test('repository evidence retains missing diagnostics for spaces, Unicode, and non-blob paths', () => {
+  const data = fixture();
+  for (const sourcePath of ['src/not present.txt', 'src/不存在.txt', 'src']) {
+    data.diagram.components[0].sources = [{ path: sourcePath, line: 1 }];
+    fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+    const result = run(['validate', 'architecture', data.input, '--repo-root', data.root, '--json']);
+    assert.equal(result.status, 1, sourcePath);
+    const diagnostic = JSON.parse(result.stdout).diagnostics.find((entry) => entry.code === 'repository-evidence/file-missing');
+    assert.ok(diagnostic, sourcePath);
+    assert.equal(diagnostic.subject.path, '/components/0/sources/0/path');
+  }
+});
+
+
+test('repository evidence preserves the 16 MiB content boundary and trusted artifact', () => {
+  const data = fixture();
+  const cap = 16 * 1024 * 1024;
+  fs.writeFileSync(path.join(data.root, 'src', 'exact-cap.bin'), Buffer.alloc(cap, 0x61));
+  fs.writeFileSync(path.join(data.root, 'src', 'over-cap.bin'), Buffer.alloc(cap + 1, 0x62));
+  git(data.root, 'add', 'src/exact-cap.bin', 'src/over-cap.bin');
+  git(data.root, 'commit', '-m', 'add evidence cap boundary files');
+  data.revision = git(data.root, 'rev-parse', 'HEAD');
+  data.diagram.meta.repository.revision = data.revision;
+  const realRoot = fs.realpathSync(data.root);
+
+  data.diagram.components[0].sources = [{ path: 'src/exact-cap.bin', line: 1 }];
+  fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+  const exactTrace = path.join(data.root, 'git-exact-cap.jsonl');
+  const exact = spawnSync(process.execPath, [cli, 'validate', 'architecture', data.input, '--repo-root', data.root, '--json'], {
+    cwd: skillRoot, encoding: 'utf8', env: { ...process.env, GIT_TRACE2_EVENT: exactTrace },
+  });
+  assert.equal(exact.status, 0, exact.stderr || exact.stdout);
+  const starts = (trace) => fs.readFileSync(trace, 'utf8').trim().split('\n').map(JSON.parse)
+    .filter((entry) => entry.event === 'start').map((entry) => entry.argv.slice(1));
+  assert.deepEqual(starts(exactTrace).slice(3), [
+    ['--no-replace-objects', '-C', realRoot, 'cat-file', '--batch'],
+  ]);
+
+  data.diagram.components[0].sources = [{ path: 'src/over-cap.bin', line: 1 }];
+  fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+  const trusted = path.join(data.root, 'must-stay-cap.html');
+  fs.writeFileSync(trusted, 'trusted cap artifact');
+  const overTrace = path.join(data.root, 'git-over-cap.jsonl');
+  const over = spawnSync(process.execPath, [cli, 'deliver', 'architecture', data.input, trusted, '--repo-root', data.root, '--json'], {
+    cwd: skillRoot, encoding: 'utf8', env: { ...process.env, GIT_TRACE2_EVENT: overTrace },
+  });
+  assert.equal(over.status, 1, over.stderr || over.stdout);
+  const diagnostic = JSON.parse(over.stdout).diagnostics.find((entry) => entry.code === 'repository-evidence/git-unavailable');
+  assert.ok(diagnostic, over.stdout);
+  assert.equal(fs.readFileSync(trusted, 'utf8'), 'trusted cap artifact');
+  assert.deepEqual(starts(overTrace).slice(3), [
+    ['--no-replace-objects', '-C', realRoot, 'cat-file', '--batch'],
+    ['--no-replace-objects', '-C', realRoot, 'cat-file', '-t', `${data.revision}:src/over-cap.bin`],
+    ['--no-replace-objects', '-C', realRoot, 'show', `${data.revision}:src/over-cap.bin`],
+  ]);
+});
