@@ -142,8 +142,10 @@ test('architecture defaults prevent predictable first-draft route churn without 
   assert.match(authoringDefaults, /6px projected-text check is a hard failure floor, not a layout target/i);
   assert.match(authoringDefaults, /at 1440px, aim for ordinary context text around 7\.5px or larger/i);
   assert.match(authoringDefaults, /meaningful vertical rows[\s\S]*Reader-declared vertical page scroll/i);
-  assert.match(authoringDefaults, /1440px desktop readability gate[\s\S]*930px[\s\S]*preserve meaning rather than designing to a fixed viewBox width/i);
-  assert.match(authoringDefaults, /do not wait for `composition\/desktop-readability`/i);
+  assert.match(authoringDefaults, /At 1440px, legacy, unknown, and authored-viewBox artifacts[\s\S]*930px diagram budget/i);
+  assert.match(authoringDefaults, /fresh automatic wide Architecture[\s\S]*recognized Reader contract[\s\S]*declared budget and cap[\s\S]*composition\.desktopReadability/i);
+  assert.match(authoringDefaults, /meaningful rows[\s\S]*intrinsic-height layout[\s\S]*not by dropping meaning or designing to a fixed viewBox width/i);
+  assert.match(authoringDefaults, /Estimate the resolved Architecture content width before the first write/i);
 });
 
 test('language behavior stays within the bounded locale contract', () => {

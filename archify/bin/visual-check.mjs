@@ -384,6 +384,9 @@ export class ChromeVisualBrowser {
       var fontsReady = document.fonts && document.fonts.ready
         ? document.fonts.ready.catch(function () {})
         : Promise.resolve();
+      if (window.Archify && Archify.layoutStability && typeof Archify.layoutStability.whenStable === 'function') {
+        return fontsReady.then(function () { return Archify.layoutStability.whenStable(); });
+      }
       return fontsReady.then(function () {
         if (window.Archify && Archify.readerLayout && typeof Archify.readerLayout.whenStable === 'function') {
           return Archify.readerLayout.whenStable();
@@ -421,22 +424,40 @@ export class ChromeVisualBrowser {
       var viewBoxWidth = viewBox ? viewBox.width : 0;
       var scale = viewBoxWidth > 0 ? Math.min(1, diagramWidth / viewBoxWidth) : 0;
       var minimum = null;
+      var minimumNonEdge = null;
+      var minimumEdge = null;
       if (svg && scale > 0) {
-        Array.from(svg.querySelectorAll('text[data-node-label], text[data-boundary-label], text[data-detail="context"], [data-edge-id] g[data-detail="context"] > text')).forEach(function (text) {
-          var detail = text.closest('[data-edge-id]') ? 'message' : text.hasAttribute('data-node-label')
+        Array.from(svg.querySelectorAll('text[data-node-label], text[data-boundary-label], text[data-detail="context"], g[data-detail="context"] text')).forEach(function (text) {
+          if (text.getAttribute('data-detail') === 'fine' || text.closest('[data-detail="fine"]')) return;
+          var edge = text.closest('[data-edge-from][data-edge-to]');
+          var node = text.closest('[data-node-id]');
+          var context = text.getAttribute('data-detail') === 'context' || Boolean(text.closest('g[data-detail="context"]'));
+          var detail = text.hasAttribute('data-node-label')
             ? 'primary'
-            : text.hasAttribute('data-boundary-label') ? 'boundary' : 'context';
-          if (detail === 'context' && !text.closest('[data-node-id]')) return;
+            : text.hasAttribute('data-boundary-label') ? 'boundary'
+              : context && edge ? 'edge' : 'context';
+          if (detail === 'context' && !node) return;
           var sourceFontPx = parseFloat(text.getAttribute('font-size') || '');
           if (!Number.isFinite(sourceFontPx)) return;
           var projectedFontPx = sourceFontPx * scale;
-          if (!minimum || projectedFontPx < minimum.projectedFontPx) {
-            minimum = {
-              text: (text.textContent || '').trim(),
-              detail: detail,
-              sourceFontPx: sourceFontPx,
-              projectedFontPx: projectedFontPx
-            };
+          var entry = {
+            text: (text.textContent || '').trim(),
+            detail: detail,
+            owner: edge ? {
+              kind: 'edge',
+              id: edge.getAttribute('data-edge-id'),
+              from: edge.getAttribute('data-edge-from'),
+              to: edge.getAttribute('data-edge-to')
+            } : node ? { kind: 'node', id: node.getAttribute('data-node-id') }
+              : detail === 'boundary' ? { kind: 'boundary', id: null } : null,
+            sourceFontPx: sourceFontPx,
+            projectedFontPx: projectedFontPx
+          };
+          if (!minimum || projectedFontPx < minimum.projectedFontPx) minimum = entry;
+          if (detail === 'edge') {
+            if (!minimumEdge || projectedFontPx < minimumEdge.projectedFontPx) minimumEdge = entry;
+          } else if (!minimumNonEdge || projectedFontPx < minimumNonEdge.projectedFontPx) {
+            minimumNonEdge = entry;
           }
         });
       }
@@ -494,8 +515,11 @@ export class ChromeVisualBrowser {
         viewBoxWidth: viewBoxWidth,
         workflowLanes: workflowLanes,
         minimumProjectedNodeTextPx: minimum ? minimum.projectedFontPx : null,
+        minimumProjectedNonEdgeTextPx: minimumNonEdge ? minimumNonEdge.projectedFontPx : null,
+        minimumProjectedEdgeTextPx: minimumEdge ? minimumEdge.projectedFontPx : null,
         minimumProjectedNodeText: minimum ? minimum.text : null,
         minimumProjectedNodeTextDetail: minimum ? minimum.detail : null,
+        minimumProjectedNodeTextOwner: minimum ? minimum.owner : null,
         hasLegend: Boolean(legendRect && legendRect.width && legendRect.height),
         hasNavigationDock: Boolean(navigationDockRect && navigationDockRect.width && navigationDockRect.height),
         legendDockIntersectionArea: stageDockIntersectionArea > 0
@@ -602,6 +626,12 @@ function observation({ width, height, theme, metrics }) {
   const minimumProjectedNodeTextPx = metrics.minimumProjectedNodeTextPx == null
     ? null
     : Number(metrics.minimumProjectedNodeTextPx);
+  const minimumProjectedNonEdgeTextPx = metrics.minimumProjectedNonEdgeTextPx == null
+    ? null
+    : Number(metrics.minimumProjectedNonEdgeTextPx);
+  const minimumProjectedEdgeTextPx = metrics.minimumProjectedEdgeTextPx == null
+    ? null
+    : Number(metrics.minimumProjectedEdgeTextPx);
   const readabilityOk = minimumProjectedNodeTextPx == null
     || minimumProjectedNodeTextPx >= MIN_PROJECTED_NODE_TEXT_PX;
   const readerLayout = metrics.readerLayout || null;
@@ -653,8 +683,11 @@ function observation({ width, height, theme, metrics }) {
     viewBoxWidth: Number(metrics.viewBoxWidth) || null,
     ...(metrics.workflowLanes?.length ? { workflowLanes: metrics.workflowLanes } : {}),
     minimumProjectedNodeTextPx,
+    minimumProjectedNonEdgeTextPx,
+    minimumProjectedEdgeTextPx,
     minimumProjectedNodeText: metrics.minimumProjectedNodeText || null,
     minimumProjectedNodeTextDetail: metrics.minimumProjectedNodeTextDetail || null,
+    minimumProjectedNodeTextOwner: metrics.minimumProjectedNodeTextOwner || null,
     minimumRequiredNodeTextPx: MIN_PROJECTED_NODE_TEXT_PX,
     readabilityOk,
     hasLegend: Boolean(metrics.hasLegend),
@@ -793,11 +826,12 @@ function observationDiagnostics({ artifact, allObservations, readabilityObservat
       evidence: {
         text: entry.minimumProjectedNodeText,
         detail: entry.minimumProjectedNodeTextDetail,
+        owner: entry.minimumProjectedNodeTextOwner,
         minimumProjectedNodeTextPx: entry.minimumProjectedNodeTextPx,
         minimumRequiredNodeTextPx: entry.minimumRequiredNodeTextPx,
       },
       supportedFixes: [
-        `increase projected node text to at least ${entry.minimumRequiredNodeTextPx}px at ${entry.width}x${entry.height}, then rerun ${command}`,
+        `increase projected ${entry.minimumProjectedNodeTextOwner?.kind === 'edge' ? 'relationship label' : entry.minimumProjectedNodeTextOwner?.kind === 'boundary' ? 'boundary label' : 'node text'} to at least ${entry.minimumRequiredNodeTextPx}px at ${entry.width}x${entry.height}, then rerun ${command}`,
       ],
     }));
   }
