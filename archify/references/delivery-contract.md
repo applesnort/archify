@@ -118,16 +118,20 @@ For the ordinary agent handoff path, prefer the serial finalizer:
 node bin/archify.mjs finalize <type> <candidate.json> <output.html> --quality showcase --json
 ```
 
-`finalize` invokes showcase `validate`, verified `deliver`, strict
-`check --require-provenance`, and `browser-check --require-provenance` in that
-order. It stops at the first failed or skipped stage and preserves that stage's
-full receipt. Its stdout is one compact JSON object with gate statuses,
-diagnostic codes, artifact identity, and evidence paths. Complete stage
-receipts and timings are written atomically to
-`<output-stem>.finalize.json`, or beside the browser receipt when `--out-dir`
-is supplied. `--receipt <path.json>` overrides that aggregate sidecar path.
-The compact receipt reports `visualReview: "not-requested"`; ordinary
-acceptance does not create images or require a perceptual reviewer.
+`finalize` invokes verified `deliver` once, reuses its embedded showcase
+validation result, then runs strict `check --require-provenance` and
+`browser-check --require-provenance`. It stops at the first failed or skipped stage
+and preserves that stage's full receipt. Its stdout is one compact JSON
+object with gate statuses, bounded actionable diagnostics, artifact identity,
+and evidence paths. The same compact object is written atomically to
+`<output-stem>.finalize-summary.json`; use that file for normal failure repair.
+Complete stage receipts and timings remain available for auditing in
+`<output-stem>.finalize.json`. With `--out-dir`, both files are written there;
+`--receipt <path.json>` overrides the full receipt path and derives a distinct
+`<path>-summary.json`. Read the full receipt only when the compact summary is
+truncated and its shown subjects and evidence cannot identify a coherent local
+repair, or when complete audit evidence was explicitly requested. The compact
+receipt reports `visualReview: "not-requested"`; ordinary acceptance does not create images or require a perceptual reviewer.
 
 A passing finalizer receipt is sufficient evidence for all four gates. Merely
 naming the gates or requiring each one to pass does not require replaying their

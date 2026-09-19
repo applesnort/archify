@@ -660,7 +660,7 @@ function usage() {
   archify render <type> <input.json> [output.html] [--quality standard|showcase] [--repo-root path]
   archify compare architecture <base.json> <head.json> [output.html] [--receipt path] [--json] [--quality standard|showcase] [--repo-root path]
   archify deliver <type> <input.json> [output.html] [--json] [--open] [--quality standard|showcase] [--repo-root path]
-  archify finalize <type> <input.json> <output.html> [--json] [--receipt path] [--out-dir <dir>] [--quality standard|showcase] [--repo-root path]
+  archify finalize <type> <input.json> <output.html> [--json] [--receipt path] [--out-dir <dir>] [--quality standard|showcase] [--repo-root path] [--candidate-sha256 hex]
   archify preview <type> <input.json> [output.html] [--no-open] [--quality standard|showcase] [--repo-root path]
   archify validate <type> <input.json> [--json] [--layout-json] [--quality standard|showcase] [--repo-root path]
   archify migrate workflow <old.json> <new.json> --to-schema 2 [--json] [--repo-root path]
@@ -2556,20 +2556,58 @@ function extractFinalizeReceiptArgs(args) {
   return { rest, receiptPath: receiptPath ? path.resolve(receiptPath) : undefined };
 }
 
+function extractCandidateSha256Args(args) {
+  const rest = [];
+  let candidateSha256;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--candidate-sha256') {
+      candidateSha256 = args[index + 1];
+      if (!candidateSha256 || candidateSha256.startsWith('--')) rejectCliArgument('--candidate-sha256 requires a SHA-256 digest.', {
+        code: 'cli/missing-option-value',
+        subject: { option: '--candidate-sha256' },
+        supportedFixes: ['provide the candidate sha256 from the passing validate receipt'],
+      });
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--candidate-sha256=')) {
+      candidateSha256 = arg.slice('--candidate-sha256='.length);
+      if (!candidateSha256) rejectCliArgument('--candidate-sha256 requires a SHA-256 digest.', {
+        code: 'cli/missing-option-value',
+        subject: { option: '--candidate-sha256' },
+        supportedFixes: ['provide the candidate sha256 from the passing validate receipt'],
+      });
+      continue;
+    }
+    rest.push(arg);
+  }
+  if (candidateSha256 !== undefined && !/^[0-9a-f]{64}$/.test(candidateSha256)) {
+    rejectCliArgument('--candidate-sha256 must be 64 lowercase hexadecimal characters.', {
+      code: 'cli/invalid-option-value',
+      subject: { option: '--candidate-sha256' },
+      evidence: { value: candidateSha256 },
+      supportedFixes: ['copy candidate.sha256 from the passing validate receipt without modification'],
+    });
+  }
+  return { rest, candidateSha256 };
+}
+
 async function commandFinalize(rawArgs) {
   const qualityArgs = extractQualityArgs(rawArgs);
   const repoArgs = extractRepoRootArgs(qualityArgs.rest);
   const outDirArgs = extractOutDirArgs(repoArgs.rest);
   const receiptArgs = extractFinalizeReceiptArgs(outDirArgs.rest);
-  const json = receiptArgs.rest.includes('--json');
+  const candidateArgs = extractCandidateSha256Args(receiptArgs.rest);
+  const json = candidateArgs.rest.includes('--json');
   const knownOptions = new Set(['--json']);
-  const unknown = receiptArgs.rest.filter((arg) => arg.startsWith('--') && !knownOptions.has(arg));
+  const unknown = candidateArgs.rest.filter((arg) => arg.startsWith('--') && !knownOptions.has(arg));
   if (unknown.length) rejectCliArgument(`Unknown finalize option "${unknown[0]}".`, {
     code: 'cli/unknown-option',
     subject: { option: unknown[0] },
     supportedFixes: ['remove the unknown option and retry'],
   });
-  const positional = receiptArgs.rest.filter((arg) => !knownOptions.has(arg));
+  const positional = candidateArgs.rest.filter((arg) => !knownOptions.has(arg));
   const [type, input, output] = positional;
   if (!type || !input || !output || positional.length !== 3) rejectCliArgument(usage(), {
     code: 'cli/usage',
@@ -2605,6 +2643,7 @@ async function commandFinalize(rawArgs) {
       output,
       quality: qualityArgs.quality || 'showcase',
       repoRoot: repoArgs.repoRoot,
+      candidateSha256: candidateArgs.candidateSha256,
       outDir: outDirArgs.outDir,
       receiptPath: receiptArgs.receiptPath,
     });
@@ -2619,7 +2658,12 @@ async function commandFinalize(rawArgs) {
       specification: { path: path.resolve(input) },
       artifact: { path: path.resolve(output) },
       gates: Object.fromEntries(['validate', 'deliver', 'check', 'browser-check'].map((stage) => [stage, 'not-run'])),
-      diagnostics: [{ code: 'finalize/runtime', severity: 'error', message: error.message }],
+      diagnostics: [{
+        code: error.finalizeCode || 'finalize/runtime',
+        severity: 'error',
+        message: error.message,
+        ...(error.finalizeEvidence ? { evidence: error.finalizeEvidence } : {}),
+      }],
       visualReview: 'not-requested',
     };
     if (json) console.log(JSON.stringify(failure));
@@ -3369,12 +3413,33 @@ function commandValidate(args) {
         const result = JSON.parse(check.stdout);
         const engineeringProfile = engineeringProfileFromArtifact(fs.readFileSync(out));
         if (json) {
+          const candidate = {
+            path: path.resolve(input),
+            ...artifactIdentity(fs.readFileSync(input)),
+          };
+          const resolvedQuality = quality || result.composition.profile || 'standard';
           console.log(JSON.stringify({
             schemaVersion: 1,
             ok: true,
             command: 'validate',
             type,
-            input: path.resolve(input),
+            input: candidate.path,
+            candidate,
+            candidateFrozen: true,
+            nextAction: {
+              command: 'finalize',
+              arguments: [
+                type,
+                candidate.path,
+                '<output.html>',
+                '--quality',
+                resolvedQuality,
+                ...(repoRoot ? ['--repo-root', repoRoot] : []),
+                '--candidate-sha256',
+                candidate.sha256,
+                '--json',
+              ],
+            },
             checks: result.checks,
             composition: result.composition,
             ...(engineeringProfile ? { engineeringProfile } : {}),

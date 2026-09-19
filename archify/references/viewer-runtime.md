@@ -16,7 +16,7 @@ Read this only when the user asks for a reader-facing capability. Ordinary gener
 
 ## Guided views and story
 
-`meta.views` may define at most five curated chapters using stable node IDs. The Named Chapter Rail, Chapter Delta Preview, Story Beat Navigator, Story Follow Camera, Story Director Strip, Story Horizon, and Shareable Story Moment links all derive from that one authored array; none owns parallel topology or layout.
+The current schema accepts up to five `meta.views` chapters using stable node IDs. This is a renderer capacity limit, not an authoring target: add only the distinct reader questions that materially benefit from guided focus. The Named Chapter Rail, Chapter Delta Preview, Story Beat Navigator, Story Follow Camera, Story Director Strip, Story Horizon, and Shareable Story Moment links all derive from that one authored array; none owns parallel topology or layout.
 
 Story transitions classify only the exact relationship between adjacent authored stops: forward, reverse, multiple, or grouped/no direct link. Never infer a transitive edge, verb, causality, or runtime behavior from proximity, kinds, or story order. Playback is reader-started, bounded, stale-safe, and motion-governed.
 

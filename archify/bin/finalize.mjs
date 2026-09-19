@@ -44,25 +44,64 @@ function parsedReceipt(stdout) {
   try { return JSON.parse(source); } catch { return null; }
 }
 
-function stageStatus(exitCode, receipt) {
-  if (exitCode === 2 || receipt?.status === 'skipped') return 'skipped';
-  return exitCode === 0 && receipt?.ok !== false ? 'pass' : 'fail';
+function isReceiptObject(receipt) {
+  return Boolean(receipt && typeof receipt === 'object' && !Array.isArray(receipt));
 }
 
-function failureDiagnostics(stage, result, receipt) {
+function validDeliveryValidation(receipt, quality) {
+  const validation = receipt?.validation;
+  return isReceiptObject(validation)
+    && Number.isInteger(validation.checkCount)
+    && validation.checkCount > 0
+    && validation.checksPassed === validation.checkCount
+    && validation.compositionStatus === 'pass'
+    && validation.errors === 0
+    && (quality !== 'showcase' || validation.warnings === 0);
+}
+
+function validStageReceipt(stage, receipt, quality) {
+  if (!isReceiptObject(receipt) || receipt.ok !== true) return false;
+  if (receipt.status && receipt.status !== 'pass') return false;
+  if (stage === 'validate') return receipt.command === 'validate' && Array.isArray(receipt.checks);
+  if (stage === 'deliver') {
+    return receipt.command === 'deliver'
+      && isReceiptObject(receipt.specification)
+      && isReceiptObject(receipt.artifact)
+      && validDeliveryValidation(receipt, quality);
+  }
+  if (stage === 'check') {
+    return isReceiptObject(receipt.artifact)
+      && Array.isArray(receipt.checks)
+      && receipt.provenance === 'current';
+  }
+  return receipt.command === 'browser-check' && receipt.status === 'pass';
+}
+
+function stageStatus(stage, exitCode, receipt, quality) {
+  if (exitCode === 2 || receipt?.status === 'skipped') return 'skipped';
+  return exitCode === 0 && validStageReceipt(stage, receipt, quality) ? 'pass' : 'fail';
+}
+
+function failureDiagnostics(stage, result, receipt, quality) {
   if (Array.isArray(receipt?.diagnostics) && receipt.diagnostics.length) return receipt.diagnostics;
+  const invalidReceipt = (result.status ?? 1) === 0 && !validStageReceipt(stage, receipt, quality);
   return [{
-    code: 'finalize/stage-failure',
+    code: invalidReceipt ? 'finalize/invalid-stage-receipt' : 'finalize/stage-failure',
     severity: 'error',
-    message: `The ${stage} stage did not complete successfully.`,
+    message: invalidReceipt
+      ? `The ${stage} stage exited successfully without a valid passing receipt.`
+      : `The ${stage} stage did not complete successfully.`,
     subject: { stage },
     evidence: {
       exitCode: result.status ?? 1,
       ...(result.signal ? { signal: result.signal } : {}),
       ...(result.error?.message ? { reason: result.error.message } : {}),
-      ...(String(result.stderr || '').trim() ? { stderr: String(result.stderr).trim() } : {}),
+      ...(String(result.stdout || '').trim() ? { stdout: String(result.stdout).trim().slice(0, 2000) } : {}),
+      ...(String(result.stderr || '').trim() ? { stderr: String(result.stderr).trim().slice(0, 2000) } : {}),
     },
-    supportedFixes: ['read the full finalize receipt and the failed stage receipt, repair that stage, then rerun finalize'],
+    supportedFixes: [invalidReceipt
+      ? `restore the ${stage} JSON receipt contract before retrying finalize`
+      : 'use the compact finalize summary to repair the named subject in place, then validate once'],
   }];
 }
 
@@ -107,6 +146,13 @@ export function defaultFinalizeReceiptPath(output, { outDir } = {}) {
   return path.join(outDir ? path.resolve(outDir) : path.dirname(artifact), `${stem}.finalize.json`);
 }
 
+export function defaultFinalizeSummaryPath(receiptPath) {
+  const receipt = path.resolve(receiptPath);
+  if (/\.finalize\.json$/i.test(receipt)) return receipt.replace(/\.finalize\.json$/i, '.finalize-summary.json');
+  if (/\.json$/i.test(receipt)) return receipt.replace(/\.json$/i, '-summary.json');
+  return `${receipt}-summary.json`;
+}
+
 function reservedFinalizePaths({ input, output, outDir }) {
   const artifact = path.resolve(output);
   const delivery = artifact.replace(/\.html?$/i, '.delivery.json');
@@ -124,7 +170,48 @@ function reservedFinalizePaths({ input, output, outDir }) {
 export function compactFinalizeReceipt(receipt) {
   const gates = {};
   for (const stage of FINALIZE_STAGES) gates[stage] = receipt.stages?.[stage]?.status || 'not-run';
-  return {
+  const allDiagnostics = receipt.diagnostics || [];
+  const diagnosticLimit = 8;
+  const selectedDiagnostics = [];
+  const selectedIndexes = new Set();
+  const seenCodes = new Set();
+  const seenSubjects = new Set();
+  const subjectKey = (entry) => {
+    const subject = entry?.subject;
+    if (!subject) return null;
+    if (typeof subject === 'string') return subject;
+    if (typeof subject !== 'object' || Array.isArray(subject)) return JSON.stringify(subject);
+    for (const key of ['id', 'edge', 'connection', 'relationship', 'component', 'node', 'path', 'stage']) {
+      if (subject[key] !== undefined) return `${key}:${JSON.stringify(subject[key])}`;
+    }
+    return JSON.stringify(subject);
+  };
+  const addDiagnostic = (entry, index) => {
+    if (selectedDiagnostics.length >= diagnosticLimit || selectedIndexes.has(index)) return;
+    selectedIndexes.add(index);
+    selectedDiagnostics.push({
+      code: entry.code,
+      severity: entry.severity || 'error',
+      message: entry.message,
+      ...(entry.subject ? { subject: entry.subject } : {}),
+      ...(entry.evidence && Object.keys(entry.evidence).length ? { evidence: entry.evidence } : {}),
+      ...(Array.isArray(entry.supportedFixes) && entry.supportedFixes.length
+        ? { supportedFixes: entry.supportedFixes.slice(0, 2) } : {}),
+    });
+  };
+  for (const [index, entry] of allDiagnostics.entries()) {
+    if (seenCodes.has(entry.code)) continue;
+    seenCodes.add(entry.code);
+    addDiagnostic(entry, index);
+  }
+  for (const [index, entry] of allDiagnostics.entries()) {
+    const key = subjectKey(entry);
+    if (!key || seenSubjects.has(key)) continue;
+    seenSubjects.add(key);
+    addDiagnostic(entry, index);
+  }
+  for (const [index, entry] of allDiagnostics.entries()) addDiagnostic(entry, index);
+  const compact = {
     schemaVersion: 1,
     ok: receipt.ok,
     command: 'finalize',
@@ -135,15 +222,25 @@ export function compactFinalizeReceipt(receipt) {
     artifact: receipt.artifact,
     gates,
     ...(receipt.failedStage ? { failedStage: receipt.failedStage } : {}),
-    diagnostics: (receipt.diagnostics || []).map((entry) => ({
-      code: entry.code,
-      severity: entry.severity || 'error',
-      message: entry.message,
-    })),
+    diagnostics: selectedDiagnostics,
+    diagnosticSummary: {
+      total: allDiagnostics.length,
+      shown: selectedDiagnostics.length,
+      truncated: allDiagnostics.length > selectedDiagnostics.length,
+    },
     evidence: receipt.evidence,
     visualReview: receipt.visualReview || 'not-requested',
     durationMs: receipt.durationMs,
   };
+  if (!receipt.ok && receipt.status === 'fail' && receipt.failedStage === 'validate') {
+    compact.nextAction = {
+      action: 'edit-in-place',
+      candidate: receipt.specification?.path,
+      constraint: 'Preserve unaffected semantics and geometry; do not replace the whole candidate.',
+      then: 'validate-once',
+    };
+  }
+  return compact;
 }
 
 export function runFinalize({
@@ -153,6 +250,7 @@ export function runFinalize({
   output,
   quality = 'showcase',
   repoRoot,
+  candidateSha256,
   outDir,
   receiptPath = defaultFinalizeReceiptPath(output, { outDir }),
   cwd = process.cwd(),
@@ -165,7 +263,19 @@ export function runFinalize({
   const resolvedInput = path.resolve(input);
   const resolvedOutput = path.resolve(output);
   const resolvedReceipt = path.resolve(receiptPath);
+  const resolvedSummary = defaultFinalizeSummaryPath(resolvedReceipt);
   const resolvedOutDir = outDir ? path.resolve(outDir) : undefined;
+  const specification = identity(resolvedInput);
+  if (candidateSha256 && specification.sha256 !== candidateSha256) {
+    const error = new Error(`The candidate changed after validation: expected sha256 ${candidateSha256}, found ${specification.sha256 || 'unreadable'}.`);
+    error.finalizeCode = 'finalize/candidate-changed';
+    error.finalizeEvidence = {
+      candidate: resolvedInput,
+      expectedSha256: candidateSha256,
+      ...(specification.sha256 ? { actualSha256: specification.sha256 } : {}),
+    };
+    throw error;
+  }
   const receiptCollision = reservedFinalizePaths({
     input: resolvedInput,
     output: resolvedOutput,
@@ -173,6 +283,14 @@ export function runFinalize({
   }).find((reserved) => pathsAlias(resolvedReceipt, reserved));
   if (receiptCollision) {
     throw new Error(`The finalize receipt must be distinct from the specification, artifact, and gate sidecars: "${receiptCollision}".`);
+  }
+  const summaryCollision = [resolvedReceipt, ...reservedFinalizePaths({
+    input: resolvedInput,
+    output: resolvedOutput,
+    outDir: resolvedOutDir,
+  })].find((reserved) => pathsAlias(resolvedSummary, reserved));
+  if (summaryCollision) {
+    throw new Error(`The finalize summary must be distinct from the full receipt, specification, artifact, and gate sidecars: "${summaryCollision}".`);
   }
 
   const receipt = {
@@ -183,17 +301,21 @@ export function runFinalize({
     type,
     quality,
     startedAt,
-    specification: identity(resolvedInput),
+    specification,
     artifact: { path: resolvedOutput },
     stages: {},
     diagnostics: [],
-    evidence: { receipt: resolvedReceipt },
+    evidence: { receipt: resolvedReceipt, summaryReceipt: resolvedSummary },
     visualReview: 'not-requested',
   };
-  writeJsonAtomic(resolvedReceipt, receipt);
+  const persistReceipts = () => {
+    writeJsonAtomic(resolvedReceipt, receipt);
+    writeJsonAtomic(resolvedSummary, compactFinalizeReceipt(receipt));
+  };
+  persistReceipts();
 
   let exitCode = 0;
-  for (const stage of FINALIZE_STAGES) {
+  for (const stage of ['deliver', 'check', 'browser-check']) {
     const stageStarted = process.hrtime.bigint();
     const args = stageArguments({
       stage,
@@ -207,17 +329,67 @@ export function runFinalize({
     const result = runCommand({ stage, cliPath, args, cwd, env });
     const stageReceipt = parsedReceipt(result.stdout);
     const code = result.status ?? 1;
-    const status = stageStatus(code, stageReceipt);
-    receipt.stages[stage] = {
+    let status = stageStatus(stage, code, stageReceipt, quality);
+    let stageDiagnostics;
+    const command = [process.execPath, cliPath, ...args];
+    const elapsed = durationMs(stageStarted);
+    if (stage === 'deliver' && status === 'pass'
+        && stageReceipt.specification.sha256 !== specification.sha256) {
+      status = 'fail';
+      stageDiagnostics = [{
+        code: 'finalize/candidate-changed-during-delivery',
+        severity: 'error',
+        message: 'The delivery command froze a different candidate than finalize started with.',
+        subject: { stage: 'validate', candidate: resolvedInput },
+        evidence: {
+          expectedSha256: specification.sha256,
+          actualSha256: stageReceipt.specification.sha256,
+        },
+        supportedFixes: ['restore the frozen candidate and rerun finalize'],
+      }];
+    }
+    const stageEntry = {
       status,
       exitCode: code,
-      durationMs: durationMs(stageStarted),
-      command: [process.execPath, cliPath, ...args],
+      durationMs: elapsed,
+      command,
       ...(stageReceipt ? { receipt: stageReceipt } : {}),
       ...(!stageReceipt && String(result.stdout || '').trim() ? { stdout: String(result.stdout).trim() } : {}),
       ...(String(result.stderr || '').trim() ? { stderr: String(result.stderr).trim() } : {}),
       ...(result.signal ? { signal: result.signal } : {}),
     };
+
+    if (stage === 'deliver' && status === 'pass') {
+      receipt.stages.validate = {
+        status: 'pass',
+        exitCode: 0,
+        durationMs: null,
+        execution: 'embedded-in-deliver',
+        command,
+        receipt: {
+          schemaVersion: 1,
+          ok: true,
+          command: 'validate',
+          specification: stageReceipt.specification,
+          validation: stageReceipt.validation,
+        },
+      };
+      receipt.stages.deliver = stageEntry;
+    } else if (stage === 'deliver') {
+      const validationFailed = stageDiagnostics
+        || ['input', 'render', 'check'].includes(stageReceipt?.stage);
+      receipt.stages.validate = validationFailed ? {
+        ...stageEntry,
+        status: 'fail',
+        durationMs: null,
+        execution: 'embedded-in-deliver',
+      } : { status: 'not-run', execution: 'embedded-in-deliver' };
+      receipt.stages.deliver = validationFailed
+        ? { status: 'not-run', execution: 'blocked-by-validate' }
+        : stageEntry;
+    } else {
+      receipt.stages[stage] = stageEntry;
+    }
 
     if (stage === 'deliver' && stageReceipt?.artifact) receipt.artifact = stageReceipt.artifact;
     if (stage === 'check' && stageReceipt?.artifact) receipt.artifact = {
@@ -227,6 +399,7 @@ export function runFinalize({
     if (stage === 'browser-check') {
       receipt.evidence = {
         receipt: resolvedReceipt,
+        summaryReceipt: resolvedSummary,
         ...browserEvidence(stageReceipt, resolvedOutput),
       };
     }
@@ -234,11 +407,12 @@ export function runFinalize({
     if (status !== 'pass') {
       exitCode = status === 'skipped' ? 2 : (code || 1);
       receipt.status = status;
-      receipt.diagnostics = failureDiagnostics(stage, result, stageReceipt);
-      receipt.failedStage = stage;
+      receipt.diagnostics = stageDiagnostics || failureDiagnostics(stage, result, stageReceipt, quality);
+      receipt.failedStage = stage === 'deliver'
+        && receipt.stages.validate.status === 'fail' ? 'validate' : stage;
       break;
     }
-    writeJsonAtomic(resolvedReceipt, receipt);
+    persistReceipts();
   }
 
   receipt.ok = exitCode === 0;
@@ -246,6 +420,6 @@ export function runFinalize({
   receipt.artifact = receipt.ok ? identity(resolvedOutput) : receipt.artifact;
   receipt.finishedAt = new Date().toISOString();
   receipt.durationMs = durationMs(started);
-  writeJsonAtomic(resolvedReceipt, receipt);
+  persistReceipts();
   return { exitCode, receipt, summary: compactFinalizeReceipt(receipt) };
 }

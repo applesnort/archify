@@ -23,6 +23,7 @@ const CAPTURE_VIEWPORTS = Object.freeze([
 const THEMES = Object.freeze(['light', 'dark']);
 const EXIT = Object.freeze({ pass: 0, fail: 1, skipped: 2 });
 export const CHROME_NO_SANDBOX_ENV = 'ARCHIFY_CHROME_NO_SANDBOX';
+export const CHROME_STARTUP_TIMEOUT_MS = 90000;
 
 function sha256(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
@@ -173,10 +174,13 @@ class PipeCdp {
   failure(stage, error) {
     const code = error?.code ? ` [${error.code}]` : '';
     const details = this.failureDetails();
-    return new Error([
+    const failure = new Error([
       `Chrome DevTools ${stage} failed: ${error?.message || String(error)}${code}`,
       details,
     ].filter(Boolean).join('\n'));
+    if (error?.code) failure.code = error.code;
+    if (error?.method) failure.method = error.method;
+    return failure;
   }
 
   consume(chunk) {
@@ -219,7 +223,10 @@ class PipeCdp {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`${method}: timed out after ${timeoutMs}ms`));
+        const error = new Error(`${method}: timed out after ${timeoutMs}ms`);
+        error.code = 'ERR_CHROME_CDP_TIMEOUT';
+        error.method = method;
+        reject(this.failure('protocol timeout', error));
       }, timeoutMs);
       this.pending.set(id, { method, resolve, reject, timer });
       try {
@@ -305,6 +312,7 @@ export class ChromeVisualBrowser {
     env = process.env,
     getuid = typeof process.getuid === 'function' ? () => process.getuid() : null,
     spawnImpl = spawn,
+    startupTimeoutMs = CHROME_STARTUP_TIMEOUT_MS,
   } = {}) {
     this.profileRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-visual-check-profile-'));
     this.stderr = '';
@@ -329,11 +337,17 @@ export class ChromeVisualBrowser {
         ].filter(Boolean).join('\n');
       },
     });
+    this.startupTimeoutMs = startupTimeoutMs;
     this.sessionPromise = this.attach();
   }
 
   async attach() {
-    const targets = await this.cdp.send('Target.getTargets');
+    // Process launch can be delayed substantially on a busy desktop. Keep the
+    // longer allowance inside one gate invocation so an authoring agent does
+    // not turn startup jitter into repeated tool calls or candidate edits.
+    const targets = await this.cdp.send(
+      'Target.getTargets', {}, undefined, this.startupTimeoutMs,
+    );
     let target = targets.targetInfos?.find((item) => item.type === 'page');
     if (!target) {
       const created = await this.cdp.send('Target.createTarget', { url: 'about:blank' });
@@ -1064,6 +1078,8 @@ async function runBrowserEvidence({
     persistReceipt(outputs, receipt);
     return { exitCode: receipt.ok ? EXIT.pass : EXIT.fail, receipt };
   } catch (error) {
+    const startupTimeout = error.code === 'ERR_CHROME_CDP_TIMEOUT'
+      && error.method === 'Target.getTargets';
     receipt.status = 'fail';
     receipt.ok = false;
     receipt.error = error.message;
@@ -1078,11 +1094,18 @@ async function runBrowserEvidence({
     receipt.captures.contactSheetImage = null;
     if (error.deliveryProvenance) receipt.provenance = error.deliveryProvenance.status;
     receipt.diagnostics = error.archifyDiagnostics || [failureDiagnostic({
-      code: `viewer/${command}-runtime`,
-      message: `${command} could not complete its Chrome inspection.`,
+      code: startupTimeout ? 'viewer/chrome-startup-timeout' : `viewer/${command}-runtime`,
+      message: startupTimeout
+        ? 'Chrome did not finish its initial DevTools handshake within the startup window.'
+        : `${command} could not complete its Chrome inspection.`,
       subject: { artifact },
       evidence: { reason: error.message },
-      supportedFixes: [`resolve the reported Chrome inspection error, then rerun ${command}`],
+      supportedFixes: startupTimeout
+        ? [
+          'do not edit or simplify the artifact because this is a browser-startup failure',
+          `retry ${command} once after host load subsides; if it repeats, stop and report the environment failure`,
+        ]
+        : [`resolve the reported Chrome inspection error, then rerun ${command}`],
     })];
     return {
       exitCode: EXIT.fail,

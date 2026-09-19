@@ -912,23 +912,24 @@ test('packaged skill puts a bounded ordinary-model path before progressive featu
     'exact paths in the Type router',
     'do not list `schemas/` or `examples/` first',
     'the next tool action must write the candidate',
-    'Do not plan exact coordinates in prose',
-    'Fresh authorship means new stable IDs, domain wording, and layout',
-    'Write the candidate before inspecting renderer internals',
-    'Start with automatic routes and labels',
-    'Do not add `via`, `channelX`, `channelY`, or `labelAt` before a diagnostic',
+    'do not plan coordinates in prose',
+    'Fresh authorship means new IDs, domain wording, and layout',
+    'let the renderer route every connection',
+    'omit `via`, `route`, `fromSide`, `toSide`, `channelX`, `channelY`, `labelAt`, `labelDx`, `labelDy`, and `labelSegment`',
+    'Add the smallest control only after a measured diagnostic',
     'Set `meta.quality_profile` to `"showcase"`',
     'Once the complete first candidate is written, run `finalize` directly',
     'Keep the candidate unchanged while the command runs',
-    'A passing final validation freezes the candidate',
-    'A receipt with only 4 artifact checks is basic validation, never showcase acceptance',
-    'require all 9 artifact checks with 0 composition errors and 0 warnings',
-    'Fix a missing or misspelled `meta.quality_profile` before geometry',
+    'A passing validation returns `candidateFrozen: true`',
+    'A receipt with only 4 artifact checks is basic validation',
+    'require all 9 checks with 0 composition errors and 0 warnings',
+    'Fix `meta.quality_profile` before geometry',
     'finalize <type> <candidate.json> <output.html> --quality showcase --json',
     'successful first drafts need no separate pre-validation',
-    'When a request names those gates or asks that each pass, do not rerun the individual commands afterward',
-    'A non-zero exit can never be described as success',
-    'Do not read `renderers/shared/geometry.mjs`',
+    'Do not read its full sidecar or rerun individual commands afterward',
+    'A non-zero exit is never success',
+    'Do not read `bin/` implementation',
+    'not prose coordinate exploration or whole-candidate replacement',
     'validate <type>',
   ]) {
     assert.match(
@@ -937,6 +938,17 @@ test('packaged skill puts a bounded ordinary-model path before progressive featu
     );
   }
   assert.match(skill.slice(fastPath, fastPathEnd), /references\/authoring-defaults\.md/);
+  assert.match(skill, /real system determine the number of nodes and relationships/i);
+  assert.match(skill, /Never use node, relationship, source-reference, view, card, or boundary counts as an authoring target/i);
+  assert.match(authoringDefaults, /Let the real system determine node and relationship counts/i);
+  assert.match(authoringDefaults, /never target a total reference count/i);
+  for (const instructions of [skill, authoringDefaults]) {
+    assert.doesNotMatch(
+      instructions,
+      /(?:at most|no more than|maximum of|cap(?:ped)? at|limit(?:ed)? to)\s+\d+\s+(?:nodes?|components?|relationships?)/i,
+      'authoring instructions must not impose a fixed topology quota',
+    );
+  }
   assert.match(authoringDefaults, /A recoverable state uses `type: "failure"` plus a real transition back to the active state/);
   assert.match(authoring, /componentType/);
   assert.match(authoring, /clear gap between boxes, not center distance/i);

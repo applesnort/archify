@@ -399,10 +399,14 @@ test('cli: finalize emits one compact receipt and keeps complete stage evidence 
   });
   assert.equal(summary.visualReview, 'not-requested');
   assert.equal(summary.evidence.receipt, path.join(outDir, 'finalize-skipped.finalize.json'));
+  assert.equal(summary.evidence.summaryReceipt, path.join(outDir, 'finalize-skipped.finalize-summary.json'));
   assert.equal(summary.evidence.browserCheckReceipt, path.join(outDir, 'finalize-skipped.browser-check.json'));
   const full = JSON.parse(fs.readFileSync(summary.evidence.receipt, 'utf8'));
-  assert.equal(full.stages.validate.receipt.checks.length, 9);
+  assert.equal(full.stages.validate.receipt.validation.checkCount, 9);
   assert.equal(full.stages['browser-check'].receipt.status, 'skipped');
+  const persistedSummary = JSON.parse(fs.readFileSync(summary.evidence.summaryReceipt, 'utf8'));
+  assert.deepEqual(persistedSummary, summary);
+  assert.equal('stages' in persistedSummary, false);
   assert.equal(fs.existsSync(out), true, 'verified delivery remains available when browser evidence is skipped');
 });
 

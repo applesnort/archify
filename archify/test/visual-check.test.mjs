@@ -9,6 +9,7 @@ import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import {
+  CHROME_STARTUP_TIMEOUT_MS,
   ChromeVisualBrowser,
   VISUAL_CHECK_VIEWPORTS,
   browserCheckSidecarPaths,
@@ -125,6 +126,34 @@ test('visual-check disables the Chrome sandbox only for root or an explicit envi
   assert.equal(ordinary.includes('--no-sandbox'), false);
   assert.equal(optedIn.includes('--no-sandbox'), true);
   assert.equal(root.includes('--no-sandbox'), true);
+});
+
+test('visual-check keeps slow Chrome startup inside one bounded gate invocation', async () => {
+  assert.equal(CHROME_STARTUP_TIMEOUT_MS, 90000);
+  const input = artifact('chrome-startup-timeout.html');
+  const child = fakeChromeChild();
+
+  const result = await runBrowserCheck({
+    artifactPath: input,
+    chromePath: '/fake/chrome',
+    browserFactory: async () => new ChromeVisualBrowser('/fake/chrome', {
+      startupTimeoutMs: 5,
+      spawnImpl: () => child,
+    }),
+  });
+
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.receipt.diagnostics[0]?.code, 'viewer/chrome-startup-timeout');
+  assert.match(result.receipt.error, /Target\.getTargets: timed out after 5ms/);
+  assert.match(result.receipt.error, /Chrome process: still running/);
+  assert.match(
+    result.receipt.diagnostics[0]?.supportedFixes?.join('\n') || '',
+    /do not edit or simplify the artifact/,
+  );
+  assert.match(
+    result.receipt.diagnostics[0]?.supportedFixes?.join('\n') || '',
+    /retry browser-check once.*stop and report the environment failure/,
+  );
 });
 
 test('visual-check converts a Chrome DevTools pipe reset and captured stderr into a structured failure', async () => {
