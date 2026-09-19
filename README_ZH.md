@@ -138,7 +138,7 @@ DeepSeek Harness（社区集成、显式启用）：运行 `dsh plugin --profile
 | **Architecture** | `使用 Archify 梳理运行时组件、边界和主要路径。` | [生产部署架构](https://tt-a1i.github.io/archify/gallery/artifacts/production-deployment.architecture.html) |
 | **Workflow** | `使用 Archify 梳理参与者、分支、审批和重试。` | [Agent 工具调用工作流](https://tt-a1i.github.io/archify/gallery/artifacts/agent-tool-call.workflow.html) |
 | **Sequence** | `使用 Archify 梳理这个 API 请求、响应和失败路径。` | [异步任务往返序列](https://tt-a1i.github.io/archify/gallery/artifacts/async-job-roundtrip.sequence.html) |
-| **Data Flow** | `使用 Archify 梳理来源、转换、存储和边界。` | [事件流数据流](https://tt-a1i.github.io/archify/gallery/artifacts/event-stream.dataflow.html) |
+| **Data Flow** | `使用 Archify 梳理来源、转换、存储和边界。` | [产品分析数据流](https://tt-a1i.github.io/archify/gallery/artifacts/product-analytics.dataflow.html) |
 | **Lifecycle** | `使用 Archify 梳理状态、事件、重试和终态。` | [Agent 运行生命周期](https://tt-a1i.github.io/archify/gallery/artifacts/agent-run.lifecycle.html) |
 
 做生产部署评审时，Architecture 可以按需启用 `deployment-ownership`

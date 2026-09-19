@@ -60,7 +60,7 @@ test('fresh authoring routes directly to a starter or full schema example withou
     architecture: ['schemas/architecture.schema.json', 'examples/web-app.architecture.json'],
     workflow: ['schemas/workflow.schema.json', 'examples/starter.workflow.json'],
     sequence: ['schemas/sequence.schema.json', 'examples/cache-miss-request.sequence.json'],
-    dataflow: ['schemas/dataflow.schema.json', 'examples/event-stream.dataflow.json'],
+    dataflow: ['schemas/dataflow.schema.json', 'examples/product-analytics.dataflow.json'],
     lifecycle: ['schemas/lifecycle.schema.json', 'examples/deployment-release.lifecycle.json'],
   };
   for (const [type, references] of Object.entries(routes)) {

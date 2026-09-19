@@ -145,7 +145,7 @@ Continue with focused requests such as `add Redis`, `move auth to the left`, or 
 | **Architecture** | `Map runtime components, boundaries, and primary path with Archify.` | [Production deployment](https://tt-a1i.github.io/archify/gallery/artifacts/production-deployment.architecture.html) |
 | **Workflow** | `Map participants, branches, approvals, and retries with Archify.` | [Agent tool-call workflow](https://tt-a1i.github.io/archify/gallery/artifacts/agent-tool-call.workflow.html) |
 | **Sequence** | `Map API request, responses, and failure paths with Archify.` | [Async job round trip](https://tt-a1i.github.io/archify/gallery/artifacts/async-job-roundtrip.sequence.html) |
-| **Data Flow** | `Map sources, transforms, stores, and boundaries with Archify.` | [Event stream dataflow](https://tt-a1i.github.io/archify/gallery/artifacts/event-stream.dataflow.html) |
+| **Data Flow** | `Map sources, transforms, stores, and boundaries with Archify.` | [Product Analytics dataflow](https://tt-a1i.github.io/archify/gallery/artifacts/product-analytics.dataflow.html) |
 | **Lifecycle** | `Map states, events, retries, and terminal outcomes with Archify.` | [Agent run lifecycle](https://tt-a1i.github.io/archify/gallery/artifacts/agent-run.lifecycle.html) |
 
 Architecture's optional `deployment-ownership` profile fails closed when authored owners, region placement, private database scope, or named crossings are missing; it is never implicit and does not inspect live infrastructure. See the [checked deployment proof](https://tt-a1i.github.io/archify/gallery.html#proof-deployment-ownership).
