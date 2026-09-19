@@ -6,11 +6,13 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
+  FINALIZE_STAGES,
   compactFinalizeReceipt,
   defaultFinalizeReceiptPath,
   defaultFinalizeSummaryPath,
   runFinalize,
 } from '../bin/finalize.mjs';
+import { CAPTURE_VIEWPORTS, THEMES, VISUAL_CHECK_VIEWPORTS } from '../bin/visual-check.mjs';
 
 function workspace(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-finalize-'));
@@ -22,6 +24,106 @@ function result(receipt, status = 0, stderr = '') {
   return { status, signal: null, stdout: `${JSON.stringify(receipt)}\n`, stderr };
 }
 
+function artifactIdentity(contents) {
+  const bytes = Buffer.isBuffer(contents) ? contents : Buffer.from(contents);
+  return {
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+    bytes: bytes.byteLength,
+  };
+}
+
+function writeCurrentDelivery(output, receipt) {
+  fs.writeFileSync(output.replace(/\.html?$/i, '.delivery.json'), `${JSON.stringify({
+    schemaVersion: 1,
+    receiptId: receipt.receiptId,
+    status: 'current',
+    command: 'deliver',
+    type: receipt.type,
+    input: receipt.input,
+    output: receipt.output,
+    specification: receipt.specification,
+    artifact: receipt.artifact,
+  })}\n`);
+}
+
+function passingDelivery({ input, output, source, artifact = '<!doctype html><title>verified</title>', receiptId = '11111111-1111-4111-8111-111111111111', quality = 'showcase', type = 'architecture' }) {
+  fs.writeFileSync(output, artifact);
+  const receipt = {
+    schemaVersion: 1,
+    receiptId,
+    ok: true,
+    command: 'deliver',
+    type,
+    input,
+    output,
+    specification: artifactIdentity(source),
+    artifact: artifactIdentity(artifact),
+    validation: {
+      checksPassed: 9,
+      checkCount: 9,
+      compositionProfile: quality,
+      compositionStatus: 'pass',
+      errors: 0,
+      warnings: 0,
+    },
+  };
+  writeCurrentDelivery(output, receipt);
+  return receipt;
+}
+
+function passingCheck({ output, artifact, deliveryReceiptId, quality = 'showcase', checkCount = 9 }) {
+  return {
+    schemaVersion: 1,
+    ok: true,
+    file: output,
+    artifact,
+    checks: Array.from({ length: checkCount }, (_, index) => ({ name: `artifact-${index}`, ok: true })),
+    provenance: 'current',
+    deliveryReceiptId,
+    composition: {
+      schemaVersion: 1,
+      profile: quality,
+      status: 'pass',
+      summary: { errors: 0, warnings: 0 },
+    },
+  };
+}
+
+function passingBrowserCheck({ output, artifact, deliveryReceiptId, outDir }) {
+  return {
+    schemaVersion: 1,
+    ok: true,
+    command: 'browser-check',
+    evidenceKind: 'automated-browser',
+    status: 'pass',
+    visualReview: 'not-requested',
+    provenance: 'current',
+    deliveryReceiptId,
+    artifact: { path: output, ...artifact },
+    diagnostics: [],
+    containment: {
+      status: 'pass',
+      viewports: VISUAL_CHECK_VIEWPORTS.map(({ width, height }) => ({ width, height, theme: 'light', ok: true })),
+    },
+    themeStates: {
+      status: 'pass',
+      viewports: CAPTURE_VIEWPORTS.flatMap(({ width, height }) => THEMES.map((theme) => ({
+        width, height, requestedTheme: theme, resolvedTheme: theme, ok: true,
+      }))),
+    },
+    readability: {
+      status: 'pass',
+      viewports: VISUAL_CHECK_VIEWPORTS.map(({ width, height }) => ({ width, height, theme: 'light', ok: true, readabilityOk: true })),
+    },
+    viewerChrome: {
+      status: 'pass',
+      viewports: VISUAL_CHECK_VIEWPORTS.map(({ width, height }) => ({ width, height, theme: 'light', ok: true, viewerChromeOk: true })),
+    },
+    captures: { status: 'not-requested', screenshots: [], contactSheet: null, contactSheetImage: null },
+    sidecars: { directory: outDir, receipt: 'diagram.browser-check.json' },
+  };
+}
+
 test('finalize reuses delivery validation, runs one build, and keeps full stage receipts out of its compact summary', t => {
   const directory = workspace(t);
   const input = path.join(directory, 'diagram.json');
@@ -29,47 +131,22 @@ test('finalize reuses delivery validation, runs one build, and keeps full stage 
   const outDir = path.join(directory, 'evidence');
   const source = '{"meta":{"quality_profile":"showcase"}}';
   fs.writeFileSync(input, source);
-  const specificationSha256 = createHash('sha256').update(source).digest('hex');
   const calls = [];
   const runCommand = ({ stage, args }) => {
     calls.push({ stage, args });
     if (stage === 'deliver') {
-      fs.writeFileSync(output, '<!doctype html><title>verified</title>');
-      return result({
-        schemaVersion: 1,
-        ok: true,
-        command: 'deliver',
-        specification: { sha256: specificationSha256, bytes: source.length },
-        artifact: { path: output, sha256: 'delivery-sha', bytes: 46 },
-        validation: {
-          checksPassed: 9,
-          checkCount: 9,
-          compositionStatus: 'pass',
-          errors: 0,
-          warnings: 0,
-        },
-      });
+      return result(passingDelivery({ input, output, source }));
     }
-    if (stage === 'check') return result({
-      schemaVersion: 1,
-      ok: true,
-      artifact: { sha256: 'check-sha', bytes: 46 },
-      checks: [{ name: 'artifact', ok: true }],
-      provenance: 'current',
-    });
+    if (stage === 'check') {
+      const delivery = passingDelivery({ input, output, source });
+      return result(passingCheck({ output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId }));
+    }
     fs.mkdirSync(outDir, { recursive: true });
     fs.writeFileSync(path.join(outDir, 'diagram.browser-check.json'), 'browser evidence');
-    return result({
-      schemaVersion: 1,
-      ok: true,
-      command: 'browser-check',
-      status: 'pass',
-      visualReview: 'not-requested',
-      diagnostics: [],
-      sidecars: { directory: outDir, receipt: 'diagram.browser-check.json' },
-      containment: { viewports: [{ large: 'large-stage-array-is-kept-only-in-full-receipt' }] },
-      captures: { status: 'not-requested', screenshots: [], contactSheet: null, contactSheetImage: null },
-    });
+    const delivery = passingDelivery({ input, output, source });
+    const browser = passingBrowserCheck({ output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId, outDir });
+    browser.containment.viewports[0].large = 'large-stage-array-is-kept-only-in-full-receipt';
+    return result(browser);
   };
 
   const finalized = runFinalize({
@@ -91,7 +168,7 @@ test('finalize reuses delivery validation, runs one build, and keeps full stage 
   assert.equal(finalized.summary.visualReview, 'not-requested');
   assert.equal('stages' in finalized.summary, false);
   assert.equal(JSON.stringify(finalized.summary).includes('large-stage-array'), false);
-  assert.equal(finalized.receipt.stages['browser-check'].receipt.containment.viewports.length, 1);
+  assert.equal(finalized.receipt.stages['browser-check'].receipt.containment.viewports.length, VISUAL_CHECK_VIEWPORTS.length);
 
   const receiptPath = defaultFinalizeReceiptPath(output, { outDir });
   assert.equal(finalized.summary.evidence.receipt, receiptPath);
@@ -255,27 +332,14 @@ test('finalize binds a passing validate receipt to the unchanged candidate', t =
     candidateSha256,
     runCommand: ({ stage }) => {
       calls.push(stage);
-      if (stage === 'deliver') fs.writeFileSync(output, '<!doctype html>');
-      if (stage === 'deliver') return result({
-        ok: true,
-        command: stage,
-        specification: { sha256: candidateSha256, bytes: source.length },
-        artifact: { path: output },
-        validation: {
-          checksPassed: 9,
-          checkCount: 9,
-          compositionStatus: 'pass',
-          errors: 0,
-          warnings: 0,
-        },
-      });
-      if (stage === 'check') return result({
-        ok: true,
-        artifact: { path: output },
-        checks: [{ ok: true }],
-        provenance: 'current',
-      });
-      return result({ ok: true, command: stage, status: 'pass', sidecars: {} });
+      const delivery = passingDelivery({ input, output, source, artifact: '<!doctype html>' });
+      if (stage === 'deliver') return result(delivery);
+      if (stage === 'check') return result(passingCheck({
+        output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId,
+      }));
+      return result(passingBrowserCheck({
+        output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId, outDir: directory,
+      }));
     },
   });
   assert.equal(pass.exitCode, 0);
@@ -325,5 +389,458 @@ test('finalize fails closed when a stage exits zero without a valid passing rece
     assert.deepEqual(calls, ['deliver']);
     assert.equal(finalized.receipt.failedStage, 'deliver');
     assert.equal(finalized.summary.diagnostics[0].code, 'finalize/invalid-stage-receipt');
+  }
+});
+
+test('finalize rejects an interleaved delivery whose check proves another artifact and receipt', t => {
+  const directory = workspace(t);
+  const input = path.join(directory, 'a.json');
+  const replacement = path.join(directory, 'b.json');
+  const output = path.join(directory, 'diagram.html');
+  const source = '{"meta":{"title":"A"}}';
+  const replacementSource = '{"meta":{"title":"B"}}';
+  fs.writeFileSync(input, source);
+  fs.writeFileSync(replacement, replacementSource);
+  const calls = [];
+
+  const finalized = runFinalize({
+    cliPath: '/fake/archify.mjs',
+    type: 'architecture',
+    input,
+    output,
+    runCommand: ({ stage }) => {
+      calls.push(stage);
+      if (stage === 'deliver') return result(passingDelivery({
+        input, output, source, artifact: '<!doctype html><title>A</title>', receiptId: '11111111-1111-4111-8111-111111111111',
+      }));
+      const deliveredB = passingDelivery({
+        input: replacement,
+        output,
+        source: replacementSource,
+        artifact: '<!doctype html><title>B</title>',
+        receiptId: '22222222-2222-4222-8222-222222222222',
+      });
+      return result(passingCheck({
+        output,
+        artifact: deliveredB.artifact,
+        deliveryReceiptId: deliveredB.receiptId,
+      }));
+    },
+  });
+
+  assert.equal(finalized.exitCode, 1);
+  assert.deepEqual(calls, ['deliver', 'check']);
+  assert.equal(finalized.receipt.failedStage, 'check');
+  assert.equal(finalized.summary.diagnostics[0].code, 'finalize/artifact-binding-mismatch');
+  assert.equal(finalized.summary.diagnostics[0].evidence.expectedDeliveryReceiptId, '11111111-1111-4111-8111-111111111111');
+  assert.equal(finalized.summary.diagnostics[0].evidence.actualDeliveryReceiptId, '22222222-2222-4222-8222-222222222222');
+});
+
+test('finalize verifies the artifact and delivery sidecar after browser evidence completes', t => {
+  const directory = workspace(t);
+  const input = path.join(directory, 'diagram.json');
+  const output = path.join(directory, 'diagram.html');
+  const source = '{"meta":{"title":"stable"}}';
+  fs.writeFileSync(input, source);
+  let delivery;
+
+  const finalized = runFinalize({
+    cliPath: '/fake/archify.mjs',
+    type: 'architecture',
+    input,
+    output,
+    runCommand: ({ stage }) => {
+      if (stage === 'deliver') {
+        delivery = passingDelivery({ input, output, source });
+        return result(delivery);
+      }
+      if (stage === 'check') return result(passingCheck({
+        output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId,
+      }));
+      const browser = passingBrowserCheck({
+        output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId, outDir: directory,
+      });
+      fs.unlinkSync(output);
+      return result(browser);
+    },
+  });
+
+  assert.equal(finalized.exitCode, 1);
+  assert.equal(finalized.receipt.failedStage, 'finalize');
+  assert.equal(finalized.summary.diagnostics[0].code, 'finalize/final-artifact-mismatch');
+  assert.deepEqual(finalized.receipt.artifact, { path: output });
+});
+
+test('a successful finalize receipt keeps the delivery identity after its final verification snapshot', t => {
+  const directory = workspace(t);
+  const input = path.join(directory, 'diagram.json');
+  const output = path.join(directory, 'diagram.html');
+  const source = '{"meta":{"title":"stable"}}';
+  fs.writeFileSync(input, source);
+  let delivery;
+  let originalRead;
+  let mutated = false;
+
+  try {
+    const finalized = runFinalize({
+      cliPath: '/fake/archify.mjs',
+      type: 'architecture',
+      input,
+      output,
+      runCommand: ({ stage }) => {
+        if (stage === 'deliver') {
+          delivery = passingDelivery({ input, output, source, artifact: '<!doctype html><title>A</title>' });
+          return result(delivery);
+        }
+        if (stage === 'check') return result(passingCheck({
+          output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId,
+        }));
+        const browser = passingBrowserCheck({
+          output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId, outDir: directory,
+        });
+        originalRead = fs.readFileSync;
+        fs.readFileSync = function interceptedRead(file, ...args) {
+          const contents = originalRead.call(this, file, ...args);
+          if (!mutated && path.resolve(file) === output) {
+            mutated = true;
+            fs.writeFileSync(output, '<!doctype html><title>B</title>');
+          }
+          return contents;
+        };
+        return result(browser);
+      },
+    });
+
+    assert.equal(mutated, true);
+    assert.equal(finalized.exitCode, 0);
+    assert.equal(finalized.receipt.ok, true);
+    assert.deepEqual(finalized.receipt.artifact, { path: output, ...delivery.artifact });
+    assert.notDeepEqual(artifactIdentity(fs.readFileSync(output)), delivery.artifact);
+  } finally {
+    if (originalRead) fs.readFileSync = originalRead;
+  }
+});
+
+test('finalize rejects a delivery sidecar replaced after the browser receipt', t => {
+  const directory = workspace(t);
+  const input = path.join(directory, 'diagram.json');
+  const replacement = path.join(directory, 'replacement.json');
+  const output = path.join(directory, 'diagram.html');
+  const source = '{"meta":{"title":"stable"}}';
+  const replacementSource = '{"meta":{"title":"replacement"}}';
+  fs.writeFileSync(input, source);
+  fs.writeFileSync(replacement, replacementSource);
+  let delivery;
+
+  const finalized = runFinalize({
+    cliPath: '/fake/archify.mjs',
+    type: 'architecture',
+    input,
+    output,
+    runCommand: ({ stage }) => {
+      if (stage === 'deliver') {
+        delivery = passingDelivery({ input, output, source });
+        return result(delivery);
+      }
+      if (stage === 'check') return result(passingCheck({
+        output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId,
+      }));
+      const browser = passingBrowserCheck({
+        output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId, outDir: directory,
+      });
+      const replacementDelivery = {
+        ...delivery,
+        receiptId: '22222222-2222-4222-8222-222222222222',
+        input: replacement,
+        specification: artifactIdentity(replacementSource),
+      };
+      writeCurrentDelivery(output, replacementDelivery);
+      return result(browser);
+    },
+  });
+
+  assert.equal(finalized.exitCode, 1);
+  assert.equal(finalized.receipt.failedStage, 'finalize');
+  assert.equal(finalized.summary.diagnostics[0].code, 'finalize/final-artifact-mismatch');
+  assert.equal(finalized.summary.diagnostics[0].evidence.currentDeliveryReceiptId, '22222222-2222-4222-8222-222222222222');
+});
+
+test('finalize rejects a delivery type mismatch before checking a different diagram contract', t => {
+  const directory = workspace(t);
+  const input = path.join(directory, 'diagram.json');
+  const output = path.join(directory, 'diagram.html');
+  const source = '{"meta":{"title":"type"}}';
+  fs.writeFileSync(input, source);
+  const calls = [];
+
+  const finalized = runFinalize({
+    cliPath: '/fake/archify.mjs',
+    type: 'architecture',
+    input,
+    output,
+    runCommand: ({ stage }) => {
+      calls.push(stage);
+      return result(passingDelivery({ input, output, source, type: 'workflow' }));
+    },
+  });
+
+  assert.equal(finalized.exitCode, 1);
+  assert.deepEqual(calls, ['deliver']);
+  assert.equal(finalized.receipt.failedStage, 'deliver');
+  assert.equal(finalized.summary.diagnostics[0].code, 'finalize/delivery-type-mismatch');
+  assert.deepEqual(finalized.summary.diagnostics[0].evidence, {
+    expectedType: 'architecture', actualType: 'workflow',
+  });
+});
+
+test('finalize rejects a final delivery sidecar whose type no longer matches the requested diagram', t => {
+  const directory = workspace(t);
+  const input = path.join(directory, 'diagram.json');
+  const output = path.join(directory, 'diagram.html');
+  const source = '{"meta":{"title":"type-sidecar"}}';
+  fs.writeFileSync(input, source);
+  let delivery;
+
+  const finalized = runFinalize({
+    cliPath: '/fake/archify.mjs',
+    type: 'architecture',
+    input,
+    output,
+    runCommand: ({ stage }) => {
+      if (stage === 'deliver') {
+        delivery = passingDelivery({ input, output, source });
+        return result(delivery);
+      }
+      if (stage === 'check') return result(passingCheck({
+        output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId,
+      }));
+      writeCurrentDelivery(output, { ...delivery, type: 'workflow' });
+      return result(passingBrowserCheck({
+        output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId, outDir: directory,
+      }));
+    },
+  });
+
+  assert.equal(finalized.exitCode, 1);
+  assert.equal(finalized.receipt.failedStage, 'finalize');
+  assert.equal(finalized.summary.diagnostics[0].code, 'finalize/final-artifact-mismatch');
+  assert.equal(finalized.summary.diagnostics[0].evidence.currentType, 'workflow');
+});
+
+test('finalize rejects a showcase delivery whose count does not match the complete artifact checker', t => {
+  const directory = workspace(t);
+  const input = path.join(directory, 'diagram.json');
+  const output = path.join(directory, 'diagram.html');
+  const source = '{"meta":{"title":"incomplete"}}';
+  fs.writeFileSync(input, source);
+  let delivery;
+
+  const finalized = runFinalize({
+    cliPath: '/fake/archify.mjs',
+    type: 'architecture',
+    input,
+    output,
+    runCommand: ({ stage }) => {
+      if (stage === 'deliver') {
+        delivery = passingDelivery({ input, output, source });
+        delivery.validation.checksPassed = 4;
+        delivery.validation.checkCount = 4;
+        return result(delivery);
+      }
+      return result(passingCheck({
+        output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId, checkCount: 9,
+      }));
+    },
+  });
+
+  assert.equal(finalized.exitCode, 1);
+  assert.equal(finalized.receipt.failedStage, 'check');
+  assert.equal(finalized.summary.diagnostics[0].code, 'finalize/delivery-validation-mismatch');
+  assert.deepEqual(finalized.summary.diagnostics[0].evidence, {
+    deliveryCheckCount: 4, checkerCheckCount: 9,
+  });
+});
+
+test('finalize requires the canonical check and browser artifact paths without inventing fallbacks', t => {
+  const cases = [
+    {
+      stage: 'check',
+      receipt: ({ output, delivery }) => {
+        const receipt = passingCheck({ output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId });
+        delete receipt.file;
+        return receipt;
+      },
+    },
+    {
+      stage: 'browser-check',
+      receipt: ({ output, delivery, directory }) => {
+        const receipt = passingBrowserCheck({
+          output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId, outDir: directory,
+        });
+        delete receipt.artifact.path;
+        return receipt;
+      },
+    },
+  ];
+
+  for (const scenario of cases) {
+    const directory = workspace(t);
+    const input = path.join(directory, 'diagram.json');
+    const output = path.join(directory, 'diagram.html');
+    const source = '{"meta":{"title":"path"}}';
+    fs.writeFileSync(input, source);
+    let delivery;
+    const finalized = runFinalize({
+      cliPath: '/fake/archify.mjs',
+      type: 'architecture',
+      input,
+      output,
+      runCommand: ({ stage }) => {
+        if (stage === 'deliver') {
+          delivery = passingDelivery({ input, output, source });
+          return result(delivery);
+        }
+        if (stage === 'check') {
+          return result(scenario.stage === stage
+            ? scenario.receipt({ output, delivery, directory })
+            : passingCheck({ output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId }));
+        }
+        return result(scenario.receipt({ output, delivery, directory }));
+      },
+    });
+
+    assert.equal(finalized.exitCode, 1, scenario.stage);
+    assert.equal(finalized.receipt.failedStage, scenario.stage);
+    assert.equal(finalized.summary.diagnostics[0].code, 'finalize/artifact-binding-mismatch');
+  }
+});
+
+test('finalize requires complete passing browser evidence coverage', t => {
+  const cases = [
+    {
+      name: 'missing containment viewport',
+      mutate: (receipt) => { receipt.containment.viewports.pop(); },
+    },
+    {
+      name: 'null containment viewport before a valid matching entry',
+      mutate: (receipt) => { receipt.containment.viewports = [null, ...receipt.containment.viewports.slice(0, -1)]; },
+    },
+    {
+      name: 'failed readability child',
+      mutate: (receipt) => { receipt.readability.viewports[0].readabilityOk = false; },
+    },
+    {
+      name: 'non-light containment viewport',
+      mutate: (receipt) => { receipt.containment.viewports[1].theme = 'dark'; },
+    },
+    {
+      name: 'missing viewer chrome viewport',
+      mutate: (receipt) => { receipt.viewerChrome.viewports = []; },
+    },
+    {
+      name: 'incomplete theme coverage',
+      mutate: (receipt) => { receipt.themeStates.viewports.pop(); },
+    },
+  ];
+
+  for (const scenario of cases) {
+    const directory = workspace(t);
+    const input = path.join(directory, 'diagram.json');
+    const output = path.join(directory, 'diagram.html');
+    const source = '{"meta":{"title":"browser"}}';
+    fs.writeFileSync(input, source);
+    let delivery;
+    const finalized = runFinalize({
+      cliPath: '/fake/archify.mjs',
+      type: 'architecture',
+      input,
+      output,
+      runCommand: ({ stage }) => {
+        if (stage === 'deliver') {
+          delivery = passingDelivery({ input, output, source });
+          return result(delivery);
+        }
+        if (stage === 'check') return result(passingCheck({
+          output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId,
+        }));
+        const browser = passingBrowserCheck({
+          output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId, outDir: directory,
+        });
+        scenario.mutate(browser);
+        return result(browser);
+      },
+    });
+
+    assert.equal(finalized.exitCode, 1, scenario.name);
+    assert.equal(finalized.receipt.failedStage, 'browser-check', scenario.name);
+    assert.equal(finalized.summary.diagnostics[0].code, 'finalize/invalid-stage-receipt', scenario.name);
+  }
+});
+
+test('finalize rejects incomplete or mismatched successful protocol receipts', t => {
+  const cases = [
+    {
+      name: 'standard validation reported for a showcase delivery',
+      stage: 'deliver',
+      receipt: ({ input, output, source }) => {
+        const receipt = passingDelivery({ input, output, source, quality: 'standard' });
+        receipt.validation.checksPassed = 4;
+        receipt.validation.checkCount = 4;
+        return receipt;
+      },
+    },
+    {
+      name: 'empty artifact checker receipt',
+      stage: 'check',
+      receipt: () => ({ ok: true, artifact: {}, checks: [], provenance: 'current' }),
+    },
+    {
+      name: 'artifact checker child failure',
+      stage: 'check',
+      receipt: ({ output, delivery }) => ({
+        ...passingCheck({ output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId }),
+        checks: [{ name: 'artifact', ok: false }],
+      }),
+    },
+    {
+      name: 'minimal browser receipt',
+      stage: 'browser-check',
+      receipt: () => ({ ok: true, command: 'browser-check', status: 'pass' }),
+    },
+  ];
+
+  for (const scenario of cases) {
+    const directory = workspace(t);
+    const input = path.join(directory, 'diagram.json');
+    const output = path.join(directory, 'diagram.html');
+    const source = '{"meta":{"title":"protocol"}}';
+    fs.writeFileSync(input, source);
+    let delivery;
+    const calls = [];
+    const finalized = runFinalize({
+      cliPath: '/fake/archify.mjs',
+      type: 'architecture',
+      input,
+      output,
+      runCommand: ({ stage }) => {
+        calls.push(stage);
+        if (stage === 'deliver') {
+          delivery = passingDelivery({ input, output, source });
+          return result(scenario.stage === stage ? scenario.receipt({ input, output, source, delivery }) : delivery);
+        }
+        if (stage === 'check') {
+          const receipt = scenario.stage === stage
+            ? scenario.receipt({ input, output, source, delivery })
+            : passingCheck({ output, artifact: delivery.artifact, deliveryReceiptId: delivery.receiptId });
+          return result(receipt);
+        }
+        return result(scenario.receipt({ input, output, source, delivery }));
+      },
+    });
+
+    assert.equal(finalized.exitCode, 1, scenario.name);
+    assert.equal(finalized.receipt.failedStage, scenario.stage, scenario.name);
+    assert.deepEqual(calls, FINALIZE_STAGES.slice(1, FINALIZE_STAGES.indexOf(scenario.stage) + 1), scenario.name);
+    assert.equal(finalized.summary.diagnostics[0].code, 'finalize/invalid-stage-receipt', scenario.name);
   }
 });

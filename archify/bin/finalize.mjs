@@ -4,7 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { pathsAlias } from '../renderers/shared/output-path.mjs';
-import { browserCheckSidecarPaths } from './visual-check.mjs';
+import {
+  browserCheckSidecarPaths,
+  CAPTURE_VIEWPORTS,
+  THEMES,
+  VISUAL_CHECK_VIEWPORTS,
+} from './visual-check.mjs';
 
 export const FINALIZE_STAGES = Object.freeze(['validate', 'deliver', 'check', 'browser-check']);
 
@@ -48,6 +53,71 @@ function isReceiptObject(receipt) {
   return Boolean(receipt && typeof receipt === 'object' && !Array.isArray(receipt));
 }
 
+function validIdentity(value) {
+  return isReceiptObject(value)
+    && typeof value.sha256 === 'string'
+    && /^[0-9a-f]{64}$/.test(value.sha256)
+    && Number.isSafeInteger(value.bytes)
+    && value.bytes >= 0;
+}
+
+function identitiesMatch(left, right) {
+  return validIdentity(left)
+    && validIdentity(right)
+    && left.sha256 === right.sha256
+    && left.bytes === right.bytes;
+}
+
+function validReceiptId(value) {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function allChecksPassed(checks) {
+  return Array.isArray(checks) && checks.length > 0
+    && checks.every((check) => isReceiptObject(check) && check.ok === true);
+}
+
+function validCheckComposition(receipt, quality) {
+  const composition = receipt?.composition;
+  return isReceiptObject(composition)
+    && composition.schemaVersion === 1
+    && composition.profile === quality
+    && composition.status === 'pass'
+    && composition.summary?.errors === 0
+    && (quality !== 'showcase' || composition.summary?.warnings === 0);
+}
+
+function exactViewportCoverage(entries, viewports, predicate) {
+  if (!Array.isArray(entries) || entries.length !== viewports.length) return false;
+  return viewports.every((expected) => {
+    const matching = entries.filter((entry) => (
+      isReceiptObject(entry)
+        && entry.width === expected.width
+        && entry.height === expected.height
+        && (expected.theme === undefined || entry.requestedTheme === expected.theme)
+    ));
+    return matching.length === 1 && predicate(matching[0], expected);
+  });
+}
+
+function validBrowserEvidence(receipt) {
+  return exactViewportCoverage(receipt.containment?.viewports, VISUAL_CHECK_VIEWPORTS, (entry) => (
+    entry.theme === 'light' && entry.ok === true
+  ))
+    && exactViewportCoverage(receipt.readability?.viewports, VISUAL_CHECK_VIEWPORTS, (entry) => (
+      entry.theme === 'light' && entry.ok === true && entry.readabilityOk === true
+    ))
+    && exactViewportCoverage(receipt.viewerChrome?.viewports, VISUAL_CHECK_VIEWPORTS, (entry) => (
+      entry.theme === 'light' && entry.ok === true && entry.viewerChromeOk === true
+    ))
+    && exactViewportCoverage(receipt.themeStates?.viewports,
+      CAPTURE_VIEWPORTS.flatMap(({ width, height }) => THEMES.map((theme) => ({ width, height, theme }))),
+      (entry, expected) => entry.ok === true
+        && entry.requestedTheme === expected.theme
+        && entry.resolvedTheme === expected.theme);
+}
+
 function validDeliveryValidation(receipt, quality) {
   const validation = receipt?.validation;
   return isReceiptObject(validation)
@@ -56,6 +126,7 @@ function validDeliveryValidation(receipt, quality) {
     && validation.checksPassed === validation.checkCount
     && validation.compositionStatus === 'pass'
     && validation.errors === 0
+    && validation.compositionProfile === quality
     && (quality !== 'showcase' || validation.warnings === 0);
 }
 
@@ -65,16 +136,154 @@ function validStageReceipt(stage, receipt, quality) {
   if (stage === 'validate') return receipt.command === 'validate' && Array.isArray(receipt.checks);
   if (stage === 'deliver') {
     return receipt.command === 'deliver'
+      && receipt.schemaVersion === 1
+      && validReceiptId(receipt.receiptId)
       && isReceiptObject(receipt.specification)
-      && isReceiptObject(receipt.artifact)
+      && validIdentity(receipt.specification)
+      && validIdentity(receipt.artifact)
       && validDeliveryValidation(receipt, quality);
   }
   if (stage === 'check') {
-    return isReceiptObject(receipt.artifact)
-      && Array.isArray(receipt.checks)
-      && receipt.provenance === 'current';
+    return validIdentity(receipt.artifact)
+      && allChecksPassed(receipt.checks)
+      && receipt.provenance === 'current'
+      && validReceiptId(receipt.deliveryReceiptId)
+      && validCheckComposition(receipt, quality);
   }
-  return receipt.command === 'browser-check' && receipt.status === 'pass';
+  return receipt.command === 'browser-check'
+    && receipt.schemaVersion === 1
+    && receipt.status === 'pass'
+    && receipt.evidenceKind === 'automated-browser'
+    && validIdentity(receipt.artifact)
+    && receipt.provenance === 'current'
+    && validReceiptId(receipt.deliveryReceiptId)
+    && receipt.containment?.status === 'pass'
+    && receipt.themeStates?.status === 'pass'
+    && receipt.readability?.status === 'pass'
+    && receipt.viewerChrome?.status === 'pass'
+    && validBrowserEvidence(receipt);
+}
+
+function identityMismatchDiagnostic({ stage, expected, actual, expectedReceiptId, actualReceiptId, output }) {
+  return {
+    code: 'finalize/artifact-binding-mismatch',
+    severity: 'error',
+    message: `The ${stage} receipt does not prove the artifact delivered by this finalize run.`,
+    subject: { stage, artifact: output },
+    evidence: {
+      expectedArtifact: expected,
+      actualArtifact: actual,
+      ...(expectedReceiptId ? { expectedDeliveryReceiptId: expectedReceiptId } : {}),
+      ...(actualReceiptId ? { actualDeliveryReceiptId: actualReceiptId } : {}),
+    },
+    supportedFixes: ['finish other delivery attempts for this output, then rerun finalize from the frozen candidate'],
+  };
+}
+
+function stageBindingDiagnostic({ stage, receipt, expectedArtifact, expectedReceiptId, output, specification, type, deliveryValidation }) {
+  if (stage === 'deliver') {
+    if (receipt.type !== type) {
+      return {
+        code: 'finalize/delivery-type-mismatch',
+        severity: 'error',
+        message: 'The delivery command reported a different diagram type than finalize requested.',
+        subject: { stage: 'deliver', artifact: output },
+        evidence: { expectedType: type, actualType: receipt.type },
+        supportedFixes: ['rerun finalize with a delivery command for the requested diagram type'],
+      };
+    }
+    if (!identitiesMatch(receipt.specification, specification)) {
+      return {
+        code: 'finalize/candidate-changed-during-delivery',
+        severity: 'error',
+        message: 'The delivery command froze a different candidate than finalize started with.',
+        subject: { stage: 'validate', candidate: specification.path },
+        evidence: {
+          expectedSha256: specification.sha256,
+          actualSha256: receipt.specification?.sha256,
+          expectedBytes: specification.bytes,
+          actualBytes: receipt.specification?.bytes,
+        },
+        supportedFixes: ['restore the frozen candidate and rerun finalize'],
+      };
+    }
+    if (path.resolve(receipt.output || '') !== output || !identitiesMatch(receipt.artifact, identity(output))) {
+      return identityMismatchDiagnostic({
+        stage,
+        expected: receipt.artifact,
+        actual: identity(output),
+        expectedReceiptId: receipt.receiptId,
+        output,
+      });
+    }
+    return null;
+  }
+  if (stage === 'check' && deliveryValidation?.checkCount !== receipt.checks.length) {
+    return {
+      code: 'finalize/delivery-validation-mismatch',
+      severity: 'error',
+      message: 'The delivery validation count does not match the complete checker receipt for the delivered artifact.',
+      subject: { stage: 'check', artifact: output },
+      evidence: {
+        deliveryCheckCount: deliveryValidation?.checkCount,
+        checkerCheckCount: receipt.checks.length,
+      },
+      supportedFixes: ['restore the complete delivery validation receipt and rerun finalize from the frozen candidate'],
+    };
+  }
+  const receiptArtifactPath = receipt.artifact?.path;
+  const receiptFile = receipt.file;
+  const pathMatchesOutput = stage === 'check'
+    ? typeof receiptFile === 'string' && path.resolve(receiptFile) === output
+    : typeof receiptArtifactPath === 'string' && path.resolve(receiptArtifactPath) === output;
+  if (!pathMatchesOutput
+      || !identitiesMatch(receipt.artifact, expectedArtifact)
+      || receipt.deliveryReceiptId !== expectedReceiptId) {
+    return identityMismatchDiagnostic({
+      stage,
+      expected: expectedArtifact,
+      actual: receipt.artifact,
+      expectedReceiptId,
+      actualReceiptId: receipt.deliveryReceiptId,
+      output,
+    });
+  }
+  return null;
+}
+
+function finalArtifactDiagnostic({ output, expectedArtifact, expectedReceiptId, type }) {
+  const currentArtifact = identity(output);
+  const deliveryPath = output.replace(/\.html?$/i, '.delivery.json');
+  let delivery;
+  try {
+    delivery = JSON.parse(fs.readFileSync(deliveryPath, 'utf8'));
+  } catch {
+    delivery = null;
+  }
+  if (identitiesMatch(currentArtifact, expectedArtifact)
+      && delivery?.schemaVersion === 1
+      && delivery.command === 'deliver'
+      && delivery.status === 'current'
+      && delivery.receiptId === expectedReceiptId
+      && delivery.type === type
+      && path.resolve(delivery.output || '') === output
+      && identitiesMatch(delivery.artifact, expectedArtifact)) return null;
+  return {
+    code: 'finalize/final-artifact-mismatch',
+    severity: 'error',
+    message: 'The artifact or delivery receipt changed after the final gate completed.',
+    subject: { stage: 'finalize', artifact: output },
+    evidence: {
+      expectedArtifact,
+      currentArtifact,
+      expectedDeliveryReceiptId: expectedReceiptId,
+      expectedType: type,
+      ...(delivery?.receiptId ? { currentDeliveryReceiptId: delivery.receiptId } : {}),
+      ...(delivery?.type ? { currentType: delivery.type } : {}),
+      ...(delivery?.artifact ? { currentDeliveryArtifact: delivery.artifact } : {}),
+    },
+    supportedFixes: ['finish other delivery attempts for this output, then rerun finalize from the frozen candidate'],
+  };
 }
 
 function stageStatus(stage, exitCode, receipt, quality) {
@@ -333,20 +542,22 @@ export function runFinalize({
     let stageDiagnostics;
     const command = [process.execPath, cliPath, ...args];
     const elapsed = durationMs(stageStarted);
-    if (stage === 'deliver' && status === 'pass'
-        && stageReceipt.specification.sha256 !== specification.sha256) {
+    if (status === 'pass') {
+      const deliveryReceipt = stage === 'deliver' ? stageReceipt : receipt.stages.deliver?.receipt;
+      const bindingDiagnostic = stageBindingDiagnostic({
+        stage,
+        receipt: stageReceipt,
+        expectedArtifact: deliveryReceipt?.artifact,
+        expectedReceiptId: deliveryReceipt?.receiptId,
+        output: resolvedOutput,
+        specification,
+        type,
+        deliveryValidation: deliveryReceipt?.validation,
+      });
+      if (bindingDiagnostic) stageDiagnostics = [bindingDiagnostic];
+    }
+    if (stageDiagnostics) {
       status = 'fail';
-      stageDiagnostics = [{
-        code: 'finalize/candidate-changed-during-delivery',
-        severity: 'error',
-        message: 'The delivery command froze a different candidate than finalize started with.',
-        subject: { stage: 'validate', candidate: resolvedInput },
-        evidence: {
-          expectedSha256: specification.sha256,
-          actualSha256: stageReceipt.specification.sha256,
-        },
-        supportedFixes: ['restore the frozen candidate and rerun finalize'],
-      }];
     }
     const stageEntry = {
       status,
@@ -376,7 +587,7 @@ export function runFinalize({
       };
       receipt.stages.deliver = stageEntry;
     } else if (stage === 'deliver') {
-      const validationFailed = stageDiagnostics
+      const validationFailed = stageDiagnostics?.some((diagnostic) => diagnostic.code === 'finalize/candidate-changed-during-delivery')
         || ['input', 'render', 'check'].includes(stageReceipt?.stage);
       receipt.stages.validate = validationFailed ? {
         ...stageEntry,
@@ -391,8 +602,7 @@ export function runFinalize({
       receipt.stages[stage] = stageEntry;
     }
 
-    if (stage === 'deliver' && stageReceipt?.artifact) receipt.artifact = stageReceipt.artifact;
-    if (stage === 'check' && stageReceipt?.artifact) receipt.artifact = {
+    if (stage === 'deliver' && stageReceipt?.artifact) receipt.artifact = {
       path: resolvedOutput,
       ...stageReceipt.artifact,
     };
@@ -417,7 +627,25 @@ export function runFinalize({
 
   receipt.ok = exitCode === 0;
   receipt.status = receipt.ok ? 'pass' : receipt.status === 'running' ? 'fail' : receipt.status;
-  receipt.artifact = receipt.ok ? identity(resolvedOutput) : receipt.artifact;
+  if (receipt.ok) {
+    const deliveryReceipt = receipt.stages.deliver?.receipt;
+    const diagnostic = finalArtifactDiagnostic({
+      output: resolvedOutput,
+      expectedArtifact: deliveryReceipt?.artifact,
+      expectedReceiptId: deliveryReceipt?.receiptId,
+      type,
+    });
+    if (diagnostic) {
+      exitCode = 1;
+      receipt.ok = false;
+      receipt.status = 'fail';
+      receipt.failedStage = 'finalize';
+      receipt.diagnostics = [diagnostic];
+    }
+  }
+  receipt.artifact = receipt.ok
+    ? { path: resolvedOutput, ...receipt.stages.deliver.receipt.artifact }
+    : identity(resolvedOutput);
   receipt.finishedAt = new Date().toISOString();
   receipt.durationMs = durationMs(started);
   persistReceipts();
