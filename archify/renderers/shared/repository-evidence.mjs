@@ -174,6 +174,12 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
   }
 
   const nodes = Object.create(null);
+  // Keep evidence lookups local to this verification. A source can be attached
+  // to multiple nodes or ranges, but the pinned revision and repository have
+  // already been checked above. Cache only the validated blob type and the
+  // derived line count; do not retain blob contents or share results across
+  // calls, repositories, or revisions.
+  const sourceMetadata = new Map();
   let referenceCount = 0;
   for (const [nodeIndex, node] of authoredNodes.entries()) {
     if (!Array.isArray(node.sources) || node.sources.length === 0) continue;
@@ -206,22 +212,32 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
         });
       }
       const object = `${revision}:${source.path}`;
-      const type = runGit(realRoot, ['cat-file', '-t', object]);
-      if (type.status !== 0 || type.stdout.trim() !== 'blob') {
-        evidenceFailure('repository-evidence/file-missing', `${where} does not identify a file at revision ${revision}.`, {
-          subject: { path: where, ...nodeSubject },
-          evidence: { sourcePath: source.path, revision },
-          supportedFixes: ['use a file path that exists at the pinned revision'],
-        });
+      let metadata = sourceMetadata.get(object);
+      if (!metadata) {
+        const type = runGit(realRoot, ['cat-file', '-t', object]);
+        if (type.status !== 0 || type.stdout.trim() !== 'blob') {
+          evidenceFailure('repository-evidence/file-missing', `${where} does not identify a file at revision ${revision}.`, {
+            subject: { path: where, ...nodeSubject },
+            evidence: { sourcePath: source.path, revision },
+            supportedFixes: ['use a file path that exists at the pinned revision'],
+          });
+        }
+        metadata = { lineCount: undefined };
+        sourceMetadata.set(object, metadata);
       }
-      if (source.line) {
+      if (source.line && metadata.lineCount === undefined) {
         const content = runGit(realRoot, ['show', object]);
         if (content.status !== 0) evidenceFailure('repository-evidence/file-unreadable', `${where} could not be read at revision ${revision}.`, {
           subject: { path: where, ...nodeSubject },
           evidence: { sourcePath: source.path, revision },
           supportedFixes: ['verify the pinned blob is readable in the local checkout'],
         });
-        const lineCount = sourceLineCount(content.stdout);
+        // Retain only the derived count. Empty files deliberately cache as 0,
+        // so check for undefined above rather than using a truthiness guard.
+        metadata.lineCount = sourceLineCount(content.stdout);
+      }
+      if (source.line) {
+        const lineCount = metadata.lineCount;
         const requestedLine = source.endLine || source.line;
         if (requestedLine > lineCount) {
           evidenceFailure('repository-evidence/line-out-of-range', `${at} requests line ${requestedLine}, but ${source.path} has ${lineCount} lines at revision ${revision}.`, {

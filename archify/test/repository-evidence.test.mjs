@@ -7,6 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { startPreview } from '../bin/preview.mjs';
 import { ChromeVisualBrowser, findChrome } from '../bin/visual-check.mjs';
+import { verifyRepositoryEvidence } from '../renderers/shared/repository-evidence.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(here, '..');
@@ -419,6 +420,120 @@ test('repository evidence is opt-in and never appears in ordinary artifacts', ()
   assert.match(html, /id="focus-evidence" hidden/);
   const svg = html.match(/<svg\b[\s\S]*?<\/svg>/)?.[0] || '';
   assert.doesNotMatch(svg, /source-evidence-beacon|data-source-evidence-count/);
+});
+
+test('repository evidence memoizes duplicate blobs within one verification only', () => {
+  const data = fixture();
+  fs.writeFileSync(path.join(data.root, 'src', 'empty.js'), '');
+  git(data.root, 'add', 'src/empty.js');
+  git(data.root, 'commit', '-m', 'add empty evidence file');
+  data.revision = git(data.root, 'rev-parse', 'HEAD');
+  data.diagram.meta.repository.revision = data.revision;
+
+  // The first reference to each file is path-only. Later references exercise
+  // both the lazy line-count read and the duplicate line-count lookup.
+  data.diagram.components[0].sources = [{ path: 'src/router.js' }];
+  data.diagram.components[1].sources = [
+    { path: 'src/router.js', line: 1 },
+    { path: 'src/router.js', line: 2 },
+  ];
+  data.diagram.components[2].sources = [{ path: 'src/empty.js' }];
+  data.diagram.components[3].sources = [{ path: 'src/empty.js', line: 1 }];
+  fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+
+  // Git's own trace2 output counts subprocesses without adding a production
+  // hook or depending on shell and executable-extension behavior.
+  const trace = path.join(data.root, 'git-commands.jsonl');
+  const realRoot = fs.realpathSync(data.root);
+
+  const result = spawnSync(process.execPath, [cli, 'validate', 'architecture', data.input, '--repo-root', data.root, '--json'], {
+    cwd: skillRoot,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      GIT_TRACE2_EVENT: trace,
+    },
+  });
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  const receipt = JSON.parse(result.stdout);
+  const diagnostic = receipt.diagnostics.find((entry) => entry.code === 'repository-evidence/line-out-of-range');
+  assert.ok(diagnostic, result.stdout);
+  assert.equal(diagnostic.subject.path, '/components/3/sources/0');
+  assert.equal(diagnostic.evidence.sourcePath, 'src/empty.js');
+  assert.equal(diagnostic.evidence.lineCount, 0);
+
+  const calls = fs.readFileSync(trace, 'utf8').trim().split('\n')
+    .map((line) => JSON.parse(line))
+    .filter((entry) => entry.event === 'start')
+    .map((entry) => entry.argv.slice(1));
+  assert.deepEqual(calls, [
+    ['--no-replace-objects', '-C', realRoot, 'rev-parse', '--show-toplevel'],
+    ['--no-replace-objects', '-C', realRoot, 'remote', 'get-url', 'origin'],
+    ['--no-replace-objects', '-C', realRoot, 'cat-file', '-e', `${data.revision}^{commit}`],
+    ['--no-replace-objects', '-C', realRoot, 'cat-file', '-t', `${data.revision}:src/router.js`],
+    ['--no-replace-objects', '-C', realRoot, 'show', `${data.revision}:src/router.js`],
+    ['--no-replace-objects', '-C', realRoot, 'cat-file', '-t', `${data.revision}:src/empty.js`],
+    ['--no-replace-objects', '-C', realRoot, 'show', `${data.revision}:src/empty.js`],
+  ]);
+
+  // A later invalid range for the same cached blob must retain its own source
+  // pointer, while reusing the one line-count read above.
+  data.diagram.components[1].sources = [
+    { path: 'src/router.js', line: 1 },
+    { path: 'src/router.js', line: 99, end_line: 99 },
+  ];
+  data.diagram.components[2].sources = [{ path: 'src/store.js' }];
+  data.diagram.components[3].sources = [{ path: 'src/store.js' }];
+  fs.writeFileSync(data.input, JSON.stringify(data.diagram));
+  const routerTrace = path.join(data.root, 'git-router-commands.jsonl');
+  const routerResult = spawnSync(process.execPath, [cli, 'validate', 'architecture', data.input, '--repo-root', data.root, '--json'], {
+    cwd: skillRoot,
+    encoding: 'utf8',
+    env: { ...process.env, GIT_TRACE2_EVENT: routerTrace },
+  });
+  assert.equal(routerResult.status, 1, routerResult.stderr || routerResult.stdout);
+  const routerReceipt = JSON.parse(routerResult.stdout);
+  const routerDiagnostic = routerReceipt.diagnostics.find((entry) => entry.code === 'repository-evidence/line-out-of-range');
+  assert.ok(routerDiagnostic, routerResult.stdout);
+  assert.equal(routerDiagnostic.subject.path, '/components/1/sources/1');
+  assert.equal(routerDiagnostic.evidence.sourcePath, 'src/router.js');
+  assert.equal(routerDiagnostic.evidence.requestedLine, 99);
+  assert.equal(routerDiagnostic.evidence.lineCount, 3);
+
+  const routerCalls = fs.readFileSync(routerTrace, 'utf8').trim().split('\n')
+    .map((line) => JSON.parse(line))
+    .filter((entry) => entry.event === 'start')
+    .map((entry) => entry.argv.slice(1));
+  assert.deepEqual(routerCalls, [
+    ['--no-replace-objects', '-C', realRoot, 'rev-parse', '--show-toplevel'],
+    ['--no-replace-objects', '-C', realRoot, 'remote', 'get-url', 'origin'],
+    ['--no-replace-objects', '-C', realRoot, 'cat-file', '-e', `${data.revision}^{commit}`],
+    ['--no-replace-objects', '-C', realRoot, 'cat-file', '-t', `${data.revision}:src/router.js`],
+    ['--no-replace-objects', '-C', realRoot, 'show', `${data.revision}:src/router.js`],
+  ]);
+});
+
+test('repository evidence cache does not cross verification calls', () => {
+  const data = fixture();
+  assert.equal(verifyRepositoryEvidence('architecture', data.diagram, data.root).verified, true);
+
+  git(data.root, 'remote', 'set-url', 'origin', 'https://github.com/example/other-repo.git');
+  assert.throws(
+    () => verifyRepositoryEvidence('architecture', data.diagram, data.root),
+    (error) => error.archifyDiagnostics?.some(({ code }) => code === 'repository-evidence/origin-mismatch'),
+  );
+
+  git(data.root, 'remote', 'set-url', 'origin', 'git@github.com:example/evidence-repo.git');
+  fs.writeFileSync(path.join(data.root, 'src', 'router.js'), 'one line only\n');
+  git(data.root, 'add', 'src/router.js');
+  git(data.root, 'commit', '-m', 'shorten evidence file');
+  data.diagram.meta.repository.revision = git(data.root, 'rev-parse', 'HEAD');
+  assert.throws(
+    () => verifyRepositoryEvidence('architecture', data.diagram, data.root),
+    (error) => error.archifyDiagnostics?.some(({ code, subject }) => (
+      code === 'repository-evidence/line-out-of-range' && subject.path === '/components/0/sources/0'
+    )),
+  );
 });
 
 
