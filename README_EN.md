@@ -29,7 +29,10 @@
   <a href="https://x.com/t20000622yy"><img src="https://img.shields.io/badge/Creator_on_X-181717?style=for-the-badge&amp;logo=x&amp;logoColor=white" alt="Follow the creator on X" /></a>
 </p>
 
-<p align="center"><a href="https://trendshift.io/repositories/31352"><img src="https://trendshift.io/api/badge/repositories/31352" alt="Archify on Trendshift" width="250" height="55" /></a></p>
+<p align="center">
+  <a href="https://x.com/t20000622yy/status/2094656813576880285"><img src="docs/assets/community/github-weekly-first.svg" alt="GitHub Trending: #1 weekly repository, all languages — historical screenshot shared September 1, 2026" width="360" height="72" /></a>
+  <a href="https://trendshift.io/repositories/31352"><img src="https://trendshift.io/api/badge/repositories/31352" alt="Archify on Trendshift" width="250" height="55" /></a>
+</p>
 
 ## See Archify in action
 
