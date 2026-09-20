@@ -900,6 +900,7 @@ test('packaged skill puts a bounded ordinary-model path before progressive featu
   const authoring = fs.readFileSync(path.join(skillRoot, 'references', 'authoring-contract.md'), 'utf8');
   const viewer = fs.readFileSync(path.join(skillRoot, 'references', 'viewer-runtime.md'), 'utf8');
   assert.match(skill, /## Existing candidate handoff[\s\S]*run `finalize` first as one CLI invocation/);
+  assert.match(skill, /After editing, omit any earlier `--candidate-sha256`/);
   const fastPath = skill.indexOf('## Fast authoring path');
   // A diagnosed repair may link to a reference inside the fast path. Bound
   // the contract by its next section, not by the first inline link.

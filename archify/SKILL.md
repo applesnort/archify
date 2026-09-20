@@ -16,7 +16,7 @@ For a real codebase, read [Repository authoring](references/repository-authoring
 
 ## Existing candidate handoff
 
-When the user supplies a frozen candidate, run `finalize` first as one CLI invocation. Named gates describe outcomes, not four commands unless explicitly requested. A passing receipt completes the ordinary handoff without screenshots or an image-capable model. If repair is needed, make the evidence-backed edit, then rerun the same `finalize` command once.
+When the user supplies a frozen candidate, run `finalize` first as one CLI invocation. Named gates describe outcomes, not four commands unless explicitly requested. A passing receipt completes the ordinary handoff without screenshots or an image-capable model. If repair is needed, make the evidence-backed edit, then run the complete `finalize` command in step 4 once. After editing, omit any earlier `--candidate-sha256`: that hash describes the previous candidate.
 
 The update check is outside the delivery critical path. A harness may start it concurrently with `finalize`; if it cannot, omit it for this task. Never add a foreground tool turn or delay a required gate for update information.
 
