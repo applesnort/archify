@@ -2,7 +2,7 @@
   "schema_version": 1,
   "study_id": "authoring-cost-20260920",
   "registered_at": "2026-09-20T04:58:04.268241+00:00",
-  "status": "C product frozen; regression and development C pending; holdout not begun",
+  "status": "complete: 36/36 authors, all independent reviews, supplemental native audit, export integrity and timeline browser QA completed",
   "variants": {
     "A": {
       "sha": "72c750bb070d95171dbb2244e5b62b1b7da69c12",
@@ -403,11 +403,54 @@
       "scope": "No instruction/example/runtime changes after e85fda5; C author runs not started"
     },
     {
-      "recorded_at": "2026-09-20T05:56:59.610646+00:00",
+      "recorded_at": "2026-09-20T05:56:59.596588+00:00",
       "before_holdout": true,
       "change": "Use supported legacy A acceptance commands and observed inline deliver hashes; no nonexistent --require-provenance or --out-dir flags for A. Common B inspection of unchanged A artifacts omits sidecar requirement and records unknown persistent provenance; native source/acceptance plus independent semantic checks remain required. B rerender geometry of A JSON is diagnostic rather than substituting for actual A artifact metrics.",
       "reason": "A check rejects all options, has no persistent delivery sidecar; old common/fixed A adapter failures were capability errors, not quality failures.",
       "retention": "All original attempts retained. Corrected fixed-input and supplemental A checks use new directories; no replacement author run. B/C author path and gate checks unchanged."
+    },
+    {
+      "after_all_author_runs": true,
+      "change": "Uniform supplemental native A validation of exact first-complete snapshots; only explicit native failure establishes first failure. No candidate or author rerun.",
+      "receipt": "native-first-A-final-audit/receipt.json",
+      "audit_duration_ms": 6880.929582985118,
+      "timing": "Separate first-snapshot diagnostic cost; not author or final-artifact delivery latency."
+    },
+    {
+      "after_run": "holdout-03-r3-B",
+      "change": "Independent adjudication of header-data directions; labels/cards/source and other sirv B/C expressions checked. Original and adjudicated reviews retained.",
+      "receipt": "holdout-03-r3-B/adjudication.json",
+      "extra_measured_review_ms": 109696.364625,
+      "coordinator_preparation_ms": null,
+      "timing": "Included in active work and final acceptance timestamp; review-procedure confound disclosed."
     }
-  ]
+  ],
+  "holdout_freeze": {
+    "utc": "2026-09-20T06:10:01.813042+00:00",
+    "candidate_sha": "cbf57445065f19d3643be895b488e2ae3df857c1",
+    "candidate_package_sha256": "efd72d86fa2504bd0515cee2382dd7f312a7ee0b4992edac3f3ae5ab0424a29e",
+    "harness_commit": "071d0f3",
+    "adapter_revision": 2,
+    "product_tuning_after_this_point": false
+  },
+  "reporting_harness_revision": {
+    "commit": "e6ca5f2",
+    "scope": "derived reporting, conservative annotations, independent receipt assembly and observer overhead diagnostic only",
+    "frozen_author_runner_observer_unchanged": true,
+    "recorded_at": "2026-09-20T06:34:55.260727+00:00"
+  },
+  "host_versions": {
+    "observed_utc": "2026-09-20T06:56:13.158921+00:00",
+    "python": "3.14.6 (main, Jun 10 2026, 10:03:53) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "python_executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "node": "v22.23.2",
+    "codex": "codex-cli 0.153.4",
+    "chrome": "152.0.7977.130",
+    "scope": "Current executable versions used by isolated runs; CLI version agrees with preflight. This records host identity, not exclusive host load or cleared caches."
+  },
+  "completed_at_utc": "2026-09-20T07:51:21.923833+00:00",
+  "reporting_harness_commit": "3bdbeb704b9658ba87acaa98d1721b8ed8358e9e",
+  "durable_evidence_root": "/Users/tushaokun/.codex/visualizations/2026/09/20/01a0bd05-f71b-7461-a1ea-6437b90d3f2c/archify-authoring-cost-20260920/evidence"
 }
