@@ -93,13 +93,15 @@ The [Proof Lab](https://tt-a1i.github.io/archify/gallery.html) contains all 11 c
 
 Archify traced [`mco-org/mco`](https://github.com/mco-org/mco) at `9f1a1cf` and produced this checked map. **[Open it ↗](https://tt-a1i.github.io/archify/cases/mco-runtime.architecture.html?theme=dark&present=1#view=dispatch-path)** · [trace reach ↗](https://tt-a1i.github.io/archify/cases/mco-runtime.architecture.html?theme=dark#focus=router&reach=downstream) · [typed source](docs/cases/mco-runtime.architecture.json)
 
-### The community takes it further
+### Easy to extend. More ways to make it yours.
 
 <sub>COMMUNITY STORIES · Selected examples shared by users</sub>
 
+**Keep building after the diagram is generated.** Archify is open source and its output is standalone HTML. Ask your agent to adapt it, connect useful links, or add interactions for your own workflow. Community creations already span team collaboration, travel planning, legal citation checks, contract review, and incident retrospectives. These are just a few examples.
+
 One user started with a hand-drawn multi-agent architecture, turned it into an interactive diagram, then added a Kimi execution pool through conversation. Others asked their agent to read a project and brought the resulting architecture into Feishu or DingTalk for team discussion.
 
-Another user turned a Shanghai CityWalk guide into a four-day itinerary: switch between days, inspect a stop, and jump to Amap, Xiaohongshu, or Dianping. Those links and itinerary interactions were configured by the author of this particular artifact.
+Another user turned a Shanghai CityWalk guide into a four-day itinerary: switch between days, inspect a stop, and jump to Amap, Xiaohongshu, or Dianping. The author also added arrival check-ins and stop notes, turning the itinerary into a small tool to use during the trip. These extensions were added by the community author for this particular artifact.
 
 ![A community-created four-day Shanghai CityWalk itinerary](docs/assets/community/shanghai-citywalk.png)
 
@@ -255,8 +257,8 @@ Architecture examples: [`web-app`](examples/web-app.html) · [`Archify pipeline`
 | Understand the structure | Walk through the story |
 |---|---|
 | Map components, workflows, and relationships from code or a description. | Explore nodes, follow paths, and explain a process chapter by chapter. |
-| **Keep refining** | **Share the result** |
-| Iterate in conversation while keeping an editable structured source. | Share a self-contained HTML file or export images, video, and share cards. |
+| **Extend it your way** | **Share the result** |
+| Keep an editable source and build on the open-source code or generated HTML with your own interactions and use cases. | Share a self-contained HTML file or export images, video, and share cards. |
 
 <details>
 <summary>The engineering behind the experience</summary>

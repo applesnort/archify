@@ -93,13 +93,15 @@ API 优先读取 Redis，缓存未命中时查询 PostgreSQL 并回填缓存。
 
 Archify 追踪 [`mco-org/mco`](https://github.com/mco-org/mco) 的 `9f1a1cf` 版本并生成这张校验地图。**[打开成品 ↗](https://tt-a1i.github.io/archify/cases/mco-runtime.architecture.html?theme=dark&present=1#view=dispatch-path)** · [追踪下游 ↗](https://tt-a1i.github.io/archify/cases/mco-runtime.architecture.html?theme=dark#focus=router&reach=downstream) · [Typed Source](docs/cases/mco-runtime.architecture.json)
 
-### 社区把图带到了更多地方
+### 易于扩展，社区还在不断创造新用法
 
 <sub>COMMUNITY STORIES · 社区用户提供的部分案例</sub>
 
+**生成之后，还可以继续创造。** Archify 开源，成品是独立 HTML，你可以让 Agent 在此基础上继续修改、接入链接、扩展交互，做出适合自己场景的作品。社区已经把它用到了团队协作、旅行规划、法律核验、合同审查和故障复盘；下面只是其中一部分。
+
 一位用户从纸上手绘的多智能体架构开始，让 Agent 生成交互图，再通过对话加入 Kimi 执行池。另一些用户让 Agent 阅读项目，把生成的架构图带进飞书或钉钉，继续和团队讨论。
 
-还有用户把上海 CityWalk 攻略整理成了四天行程图：按天切换路线，点击节点查看地点信息，并跳转高德地图、小红书和大众点评。这些链接与行程交互由该案例的作者配置。
+还有用户把上海 CityWalk 攻略整理成了四天行程图：按天切换路线，点击节点查看地点信息，并跳转高德地图、小红书和大众点评。作者还扩展了到达打卡和停留记录，让一张路线图变成旅途中可以实际使用的小工具。这些扩展由社区作者为该作品添加。
 
 ![社区用户创作的上海 CityWalk 四天行程图](docs/assets/community/shanghai-citywalk.png)
 
@@ -256,8 +258,8 @@ Architecture 示例：[`Web App`](examples/web-app.html) · [`Archify Pipeline`]
 | 读懂结构 | 边看边讲 |
 |---|---|
 | 从代码或描述出发，整理关键组件、流程和关系。 | 点击节点、追踪路径、按章节展开复杂流程。 |
-| **持续修改** | **方便交付** |
-| 在对话中调整，保留可继续编辑的结构化源文件。 | 分享独立 HTML，或导出图片、视频与分享卡片。 |
+| **易于扩展** | **方便交付** |
+| 保留可编辑源文件，也可基于开源代码和 HTML 成品扩展自己的交互与用途。 | 分享独立 HTML，或导出图片、视频与分享卡片。 |
 
 <details>
 <summary>这些体验背后的工程能力</summary>
