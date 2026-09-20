@@ -4,9 +4,11 @@
     <img src="docs/assets/archify-lockup-light.svg" alt="Archify" width="440" height="121" />
   </picture>
 </p>
-<h3 align="center">Turn code, ideas, and workflows into diagrams you can explore and share.</h3>
+<h3 align="center">Turn anything you want to understand, plan, or share into an interactive visual.</h3>
 
-<p align="center">Describe a system in your favorite AI agent, or ask it to read a repository. Archify creates a self-contained interactive HTML diagram: explore details, follow a request, walk through a story, and share the whole artifact.</p>
+<p align="center">Start with an idea, a question, or a plan. Describe it to your AI agent, and Archify turns it into an interactive HTML you can explore, customize, and share. From travel itineraries and learning maps to complex systems—make it your own.</p>
+
+<p align="center">See what the community is creating—and imagine what you could make next.</p>
 
 <p align="center">
   <a href="https://tt-a1i.github.io/archify/gallery.html"><strong>Live demos</strong></a> &nbsp;·&nbsp;
