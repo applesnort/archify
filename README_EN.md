@@ -14,8 +14,8 @@
 </p>
 
 <p align="center">
-  <a href="https://x.com/t20000622yy/status/2094656813576880285"><img src="docs/assets/community/github-weekly-first.svg" alt="GitHub Trending: #1 weekly repository, all languages — historical screenshot shared September 1, 2026" width="360" height="72" /></a>
-  <a href="https://trendshift.io/repositories/31352"><img src="https://trendshift.io/api/badge/repositories/31352" alt="Archify on Trendshift" width="327" height="72" /></a>
+  <a href="https://trendshift.io/weekly/2026/35"><img src="https://trendshift.io/api/badge/trendshift/repositories/31352/weekly" alt="Trendshift: #1 repository of the week, August 24–30, 2026" width="327" height="72" /></a>
+  <a href="https://trendshift.io/repositories/31352"><img src="https://trendshift.io/api/badge/trendshift/repositories/31352/daily" alt="Trendshift: #1 repository of the day" width="327" height="72" /></a>
 </p>
 
 <p align="center">
