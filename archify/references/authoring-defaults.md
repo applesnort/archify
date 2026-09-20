@@ -17,6 +17,10 @@ Keep `<repo-root>` from source inspection and pass it to the first `finalize` ca
 
 A source reference proves only the implementation visible at that location. When separate files or locations establish materially different relationships, protocols, lifecycle transitions, persistence behavior, or conclusion-card claims, attach those inspected locations to the relevant semantic node. Let the real claims determine the references; never target a total reference count or reuse one citation as a proxy for evidence it does not contain.
 
+## Field constraints before writing
+
+Examples demonstrate valid field shape. Before choosing a different boundary kind or writing a guided-view note, inspect `properties.boundaries.items` in `schemas/architecture.schema.json` and `$defs.guidedViews` in `schemas/common.schema.json`. Use their actual enums and length limits. Keep longer evidence in a conclusion card; do not remove the underlying fact to fit a note. Finished showcase examples may contain measured route repairs; transfer their semantic shape, then follow the automatic-routing first-draft rule below.
+
 ## Composition and meaning
 
 - Keep one obvious main path. Side branches leave the nearest main-path node. Omit a relationship only during semantic authoring when repository evidence shows it is genuinely irrelevant or already expresses no distinct fact; never delete it to simplify geometry.
