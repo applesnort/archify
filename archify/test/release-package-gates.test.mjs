@@ -45,7 +45,7 @@ function workflowStep(workflow, name) {
 }
 
 function workflowJob(workflow, name) {
-  const marker = `  ${name}:`;
+  const marker = `\n  ${name}:\n`;
   const start = workflow.indexOf(marker);
   assert.notEqual(start, -1, `workflow is missing the "${name}" job`);
   const next = workflow.slice(start + marker.length).search(/\n  [a-z][a-z0-9-]*:\n/);
