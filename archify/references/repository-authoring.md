@@ -52,15 +52,12 @@ the affected entry points, configuration, dependencies, and evidence.
 
 ## Choose an example by structure
 
-For a CLI or an in-memory transformation library, use
-`examples/source-to-diagram/source-to-diagram.architecture.json` instead of the
-Type router's web-app example. Its roles demonstrate control versus I/O; a
-library need not acquire filesystem nodes. For request/service/storage systems,
-use `examples/web-app.architecture.json`; for deployment boundaries, use
-`examples/production-deployment.architecture.json`. These latter files are
-finished showcases. Use their field shape and preserve the first-draft automatic
-routing rule. Mixed systems keep their actual roles rather than fitting one
-example's topology.
+Select the main example before loading its content using the
+[Repository Architecture example selection](../SKILL.md#repository-architecture-example-selection)
+in the Type router. Apply that selection in the existing reading batch; use
+additional examples only for necessary capabilities the selected one does not
+explain. Preserve the system's actual roles rather than fitting an example's
+topology.
 
 ## Author from evidence
 
