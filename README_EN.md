@@ -1,5 +1,3 @@
-<p align="center"><strong>English</strong> · <a href="./README_ZH.md">简体中文</a></p>
-
 <p align="center"><img src="docs/assets/archify-mark.svg" alt="Archify" width="160" height="144" /></p>
 
 <h1 align="center">Archify</h1>
@@ -11,7 +9,8 @@
   <a href="https://tt-a1i.github.io/archify/gallery.html"><strong>Live demos</strong></a> &nbsp;·&nbsp;
   <a href="#start"><strong>Get started</strong></a> &nbsp;·&nbsp;
   <a href="https://tt-a1i.github.io/archify/guide.html"><strong>Scenario guide</strong></a> &nbsp;·&nbsp;
-  <a href="#community"><strong>Community</strong></a>
+  <a href="#community"><strong>Community</strong></a> &nbsp;·&nbsp;
+  <a href="./README_ZH.md"><strong>简体中文</strong></a>
 </p>
 
 <p align="center">
