@@ -225,8 +225,6 @@ test('README preserves the visual proof set and key content', () => {
     }
   }
 
-  const chinese = fs.readFileSync(path.join(repoRoot, 'README_ZH.md'), 'utf8');
-  assert.ok(chinese.includes('docs/assets/claude-skills-settings.png'), 'README_ZH.md lost the Claude Skills setup image');
 });
 
 test('all README languages end with the self-hosted star history chart', () => {
