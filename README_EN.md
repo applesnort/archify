@@ -106,7 +106,7 @@ One user started with a hand-drawn multi-agent architecture, turned it into an i
 
 Another user turned a Shanghai CityWalk guide into a four-day itinerary: switch between days, inspect a stop, and jump to Amap, Xiaohongshu, or Dianping. The author also added arrival check-ins and stop notes, turning the itinerary into a small tool to use during the trip. These extensions were added by the community author for this particular artifact.
 
-![A community-created four-day Shanghai CityWalk itinerary](docs/assets/community/shanghai-citywalk.png)
+[![A community-created four-day Shanghai CityWalk itinerary](docs/assets/community/shanghai-citywalk.png)](https://tt-a1i.github.io/archify/cases/community/shanghai-citywalk.html)
 
 <sub>Community artifact · Shanghai CityWalk · Four days of routes and place links</sub>
 
@@ -114,9 +114,9 @@ Another user turned a Shanghai CityWalk guide into a four-day itinerary: switch 
 
 The output is a self-contained HTML file. Download it and open it in your browser to use the node details, path exploration, and guided chapters included in that artifact. No Archify installation is needed to view it. Send the HTML to someone else and the interactions go with it; external websites and map links need a network connection.
 
-**[Open an interactive example ↗](https://tt-a1i.github.io/archify/gallery/artifacts/cache-miss.sequence.html?theme=dark&present=1#route=web~db)** · **[Download example HTML ↓](https://github.com/tt-a1i/archify/raw/refs/heads/main/docs/gallery/artifacts/cache-miss.sequence.html)**
+**[Explore the Shanghai CityWalk ↗](https://tt-a1i.github.io/archify/cases/community/shanghai-citywalk.html)** · **[Download HTML ↓](https://github.com/tt-a1i/archify/raw/refs/heads/main/docs/cases/community/shanghai-citywalk.html)**
 
-<sub>These links open and download the repository's cache-miss example.</sub>
+<sub>Try switching between D1–D4, opening a place card, or following a map link. Times and place information reflect the author's original itinerary.</sub>
 
 ## Community and recognition
 

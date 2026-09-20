@@ -106,7 +106,7 @@ Archify 追踪 [`mco-org/mco`](https://github.com/mco-org/mco) 的 `9f1a1cf` 版
 
 还有用户把上海 CityWalk 攻略整理成了四天行程图：按天切换路线，点击节点查看地点信息，并跳转高德地图、小红书和大众点评。作者还扩展了到达打卡和停留记录，让一张路线图变成旅途中可以实际使用的小工具。这些扩展由社区作者为该作品添加。
 
-![社区用户创作的上海 CityWalk 四天行程图](docs/assets/community/shanghai-citywalk.png)
+[![社区用户创作的上海 CityWalk 四天行程图](docs/assets/community/shanghai-citywalk.png)](https://tt-a1i.github.io/archify/cases/community/shanghai-citywalk.html)
 
 <sub>社区作品 · 上海 CityWalk · 四天行程与地点链接</sub>
 
@@ -114,9 +114,9 @@ Archify 追踪 [`mco-org/mco`](https://github.com/mco-org/mco) 的 `9f1a1cf` 版
 
 成品是一个独立的 HTML 文件。下载后用浏览器打开，即可使用该作品包含的节点详情、路径探索和章节演示，无需安装 Archify。把 HTML 文件发给别人，交互也会一起保留；外部网站和地图链接需要网络。
 
-**[打开交互示例 ↗](https://tt-a1i.github.io/archify/gallery/artifacts/cache-miss.sequence.html?theme=dark&present=1#route=web~db)** · **[下载示例 HTML ↓](https://github.com/tt-a1i/archify/raw/refs/heads/main/docs/gallery/artifacts/cache-miss.sequence.html)**
+**[打开上海 CityWalk 交互版 ↗](https://tt-a1i.github.io/archify/cases/community/shanghai-citywalk.html)** · **[下载 HTML ↓](https://github.com/tt-a1i/archify/raw/refs/heads/main/docs/cases/community/shanghai-citywalk.html)**
 
-<sub>以上打开和下载链接指向仓库自带的缓存回源示例。</sub>
+<sub>试试切换 D1–D4、点击地点卡片，或打开地图链接。行程中的时间和地点信息为作者创作时的记录。</sub>
 
 ## 社区与关注
 
