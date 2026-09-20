@@ -17,8 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://trendshift.io/weekly/2026/35"><img src="https://trendshift.io/api/badge/trendshift/repositories/31352/weekly" alt="Trendshift: #1 repository of the week, August 24–30, 2026" width="327" height="72" /></a>
-  <a href="https://trendshift.io/repositories/31352"><img src="https://trendshift.io/api/badge/trendshift/repositories/31352/daily" alt="Trendshift: #1 repository of the day" width="327" height="72" /></a>
+  <a href="https://trendshift.io/repositories/31352?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-31352" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/31352" alt="tt-a1i/archify | Trendshift" width="250" height="55" /></a>
 </p>
 
 <p align="center">
