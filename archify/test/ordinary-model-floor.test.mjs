@@ -911,7 +911,7 @@ test('packaged skill puts a bounded ordinary-model path before progressive featu
   for (const required of [
     'exact paths in the Type router',
     'do not list `schemas/` or `examples/` first',
-    'the next tool action must write the candidate',
+    'once requested scope and source evidence are covered, write the candidate directly',
     'do not plan coordinates in prose',
     'Fresh authorship means new IDs, domain wording, and layout',
     'let the renderer route every connection',
