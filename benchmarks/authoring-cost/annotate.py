@@ -6,12 +6,14 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 import shlex
 from typing import Any, Mapping
 
 
-READ_TOOLS = {"cat", "head", "tail", "sed", "nl", "awk", "grep", "rg", "find", "ls", "pwd", "stat", "wc", "realpath"}
-CLI_PHASES = {"validate", "render", "finalize", "deliver", "check"}
+READ_TOOLS = {"cat", "sed", "nl"}
+CLI_PHASES = {"validate", "render", "finalize", "deliver", "check", "browser-check", "visual-check"}
+SHELL_MARKERS = ("&&", "||", ";", "|", ">", "<", "&", "\n", "\r", "<<", "$(", "`")
 
 
 def _unwrap_shell(command: str) -> tuple[list[str] | None, str]:
@@ -24,11 +26,13 @@ def _unwrap_shell(command: str) -> tuple[list[str] | None, str]:
         return None, "empty command"
     executable = pathlib.Path(outer[0]).name.lower()
     if executable not in {"sh", "bash", "zsh", "dash", "fish"}:
+        if any(token in command for token in SHELL_MARKERS):
+            return None, "compound direct command"
         return outer, "direct command"
     if len(outer) != 3 or outer[1] not in {"-c", "-lc"}:
         return None, "shell form is not exact single payload"
     payload = outer[2]
-    if any(token in payload for token in ("&&", "||", ";", "|", ">", "<", "\n", "\r", "<<")):
+    if any(token in payload for token in SHELL_MARKERS):
         return None, "compound shell payload"
     try:
         inner = shlex.split(payload)
@@ -44,9 +48,14 @@ def classify(command: Any) -> tuple[str, str]:
     if tokens is None:
         return "unknown", basis
     executable = pathlib.Path(tokens[0]).name.lower()
-    if executable == "rg" and "--files" in tokens and "source" in " ".join(tokens).lower():
+    if executable == "rg" and tokens[1:] == ["--files", "source"]:
         return "repo_discovery", "exact rg --files source operation"
     if executable in READ_TOOLS:
+        if executable == "sed":
+            # Only recognize a non-mutating, single-file line print.  In
+            # particular, sed -i and scripts containing e/s/d remain unknown.
+            if len(tokens) != 4 or tokens[1] != "-n" or not re.fullmatch(r"\d+(,\d+)?p", tokens[2]):
+                return "unknown", "sed form is not exact -n line-range print"
         joined = " ".join(tokens[1:]).lower()
         if executable in {"cat", "nl"} and ("skill.md" in joined or "references/" in joined):
             return "run_setup", "exact Skill/reference read"
@@ -59,10 +68,16 @@ def classify(command: Any) -> tuple[str, str]:
         if pathlib.Path(token).name == "archify.mjs" and index + 1 < len(tokens) and tokens[index + 1].lower() in CLI_PHASES:
             operation = tokens[index + 1].lower()
             if operation == "validate":
-                return "input_schema", "exact Archify validate operation"
+                return "combined_validation", "exact Archify validate operation includes render and check"
+            if operation == "check":
+                return "artifact_check", "exact Archify artifact check operation"
+            if operation == "render":
+                return "layout_render", "exact Archify layout render operation"
+            if operation in {"browser-check", "visual-check"}:
+                return "combined_browser_quality", f"exact Archify {operation} operation"
             if operation in {"finalize", "deliver"}:
                 return "combined_pipeline", "exact Archify finalize/deliver operation"
-            return "delivery_finish", "exact Archify CLI operation"
+            return "unknown", "unclassified Archify CLI operation"
     return "unknown", "compound or unclassified command"
 
 

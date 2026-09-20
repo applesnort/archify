@@ -36,9 +36,11 @@ class SummarizeTests(unittest.TestCase):
             (root / "manifest.json").write_text(json.dumps(manifest))
             (run_a / "summary.json").write_text(json.dumps({"status": "completed", "returncode": 0, "execution_wall_ms": 100, "pre_first_complete_ms": 20, "usage": {"input_tokens": 9}}))
             (run_a / "quality.json").write_text(json.dumps({"status": "failed", "first_candidate": {"status": "failed"}, "repair_edits": 3}))
-            (run_c / "summary.json").write_text(json.dumps({"status": "completed", "returncode": 0, "execution_wall_ms": 200, "usage": {"input_tokens": 10}}))
+            (run_c / "summary.json").write_text(json.dumps({"status": "completed", "returncode": 0, "execution_wall_ms": 200, "process_started_observed_utc": "2026-09-20T06:00:00.000Z", "usage": {"input_tokens": 10}}))
             (run_c / "run-setup.json").write_text(json.dumps({"duration_ms": 50}))
             (run_c / "quality.json").write_text(json.dumps({"status": "passed", "native_acceptance": "passed", "common_acceptance": "passed", "semantic": {"status": "passed"}, "visual": {"status": "passed"}, "final_machine_duration_ms": 30, "review_duration_ms": 20, "first_snapshot_audit_ms": 7, "reviewer_idle_queue_ms": 11}))
+            (run_c / "independent-review").mkdir()
+            (run_c / "independent-review" / "review.json").write_text(json.dumps({"status": "passed", "reviewed_at_utc": "2026-09-20T06:00:02.500Z"}))
             output = root / "output"
             self.assertEqual(summarize.main(["--manifest", str(root / "manifest.json"), "--evidence", str(evidence), "--output", str(output)]), 0)
             rows = json.loads((output / "runs.json").read_text())
@@ -48,12 +50,29 @@ class SummarizeTests(unittest.TestCase):
             accepted = next(row for row in rows if row["run_id"] == "case-C")
             self.assertEqual(accepted["accepted_total_ms"], 300)
             self.assertEqual(accepted["observed_accepted_subtotal_ms"], 250)
+            self.assertEqual(accepted["accepted_active_work_ms"], 300)
+            self.assertEqual(accepted["dispatch_to_independent_review_wall_ms"], 2500.0)
+            self.assertEqual(accepted["dispatch_to_accepted_wall_ms"], 2500.0)
             self.assertEqual(accepted["diagnostic_first_snapshot_ms"], 7)
             self.assertEqual(accepted["reviewer_idle_queue_ms"], 11)
             stage = json.loads((output / "stage-summary.json").read_text())
             self.assertEqual(stage["registered_attempts"], 3)
             self.assertEqual(stage["pending_attempts"], 1)
             self.assertIsNone(stage["comparisons"][0]["accepted_only_difference_ms"])
+            c_group = next(group for group in stage["groups"] if group["case_id"] == "case" and group["variant"] == "C")
+            self.assertEqual(c_group["dispatch_to_independent_review_wall"]["median_ms"], 2500.0)
+
+    def test_repair_edit_summary_uses_edit_units_and_keeps_missing_values_unknown(self):
+        rows = [
+            {"case_id": "case", "variant": "C", "registered_status": "observed", "execution_status": "completed", "quality_status": "passed", "first_quality_status": "failed", "process_completed": True, "process_execution_ms": 10, "process_completed_ms": 10, "accepted_author_execution_ms": 10, "accepted_total_ms": None, "dispatch_to_accepted_wall_ms": None, "repair_edits": 3, "diagnostic_first_snapshot_ms": None, "reviewer_idle_queue_ms": None, "accepted_timing_status": "not_accepted"},
+            {"case_id": "case", "variant": "C", "registered_status": "observed", "execution_status": "completed", "quality_status": "failed", "first_quality_status": "failed", "process_completed": True, "process_execution_ms": 20, "process_completed_ms": 20, "accepted_author_execution_ms": None, "accepted_total_ms": None, "dispatch_to_accepted_wall_ms": None, "repair_edits": 1, "diagnostic_first_snapshot_ms": None, "reviewer_idle_queue_ms": None, "accepted_timing_status": "not_accepted"},
+            {"case_id": "case", "variant": "C", "registered_status": "observed", "execution_status": "completed", "quality_status": "failed", "first_quality_status": "failed", "process_completed": True, "process_execution_ms": 30, "process_completed_ms": 30, "accepted_author_execution_ms": None, "accepted_total_ms": None, "dispatch_to_accepted_wall_ms": None, "repair_edits": None, "diagnostic_first_snapshot_ms": None, "reviewer_idle_queue_ms": None, "accepted_timing_status": "not_accepted"},
+        ]
+        group = summarize.group_report(rows, {"id": "case", "cohort": "holdout"}, "C")
+        self.assertEqual(group["repair_edits"], {"sample_count": 2, "median_edits": 2.0, "range_edits": [1, 3]})
+        self.assertNotIn("median_ms", group["repair_edits"])
+        self.assertEqual(group["accepted_dispatch_wall"]["count"], 0)
+        self.assertIsNone(group["accepted_dispatch_wall"]["median_ms"])
 
     def test_passed_quality_without_independent_review_is_not_claimed_accepted(self):
         quality = {"status": "passed", "native_delivery": "passed", "common_final_json_validate": "passed"}
@@ -79,7 +98,7 @@ class SummarizeTests(unittest.TestCase):
         self.assertEqual(annotate.classify("/bin/zsh -lc 'cat archify/SKILL.md'")[0], "run_setup")
         self.assertEqual(annotate.classify("/bin/zsh -lc 'rg --files source'")[0], "repo_discovery")
         self.assertEqual(annotate.classify("/bin/zsh -lc 'nl -ba source/index.js'")[0], "evidence_read")
-        self.assertEqual(annotate.classify("/bin/zsh -lc 'node archify/bin/archify.mjs validate candidate.json'")[0], "input_schema")
+        self.assertEqual(annotate.classify("/bin/zsh -lc 'node archify/bin/archify.mjs validate candidate.json'")[0], "combined_validation")
         self.assertEqual(annotate.classify("/bin/zsh -lc 'cat source/a && rm source/b'")[0], "unknown")
 
 

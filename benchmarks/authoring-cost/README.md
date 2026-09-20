@@ -71,3 +71,16 @@ beside the original report. B's rerendered JSON geometry is diagnostic for A;
 actual A artifact checks and its native browser result remain authoritative for
 A-native acceptance. Native policies differ on readable vertical scrolling;
 report this difference separately from timing and semantic quality.
+
+The reports also retain `dispatch_to_accepted_wall_ms`, measured from the
+observed author process start to the independent review completion UTC timestamp.
+This includes orchestration and review queues, unlike `accepted_active_work_ms`.
+It is not a controlled estimate of product-only latency; the two measures must
+not be added together. Shared preparation or adjudication costs remain separate
+when their per-run allocation is unknown.
+
+`observer-overhead.py --repeats 5 --output <receipt.json>` checks deterministic
+producer output hashes with collection on/off and measures the local wrapper
+delta. Run it outside formal author timing. Its tiny synthetic producer measures
+collection mechanics only; it is not a substitute for actual author or renderer
+performance and cannot establish a percentage overhead for long model sessions.

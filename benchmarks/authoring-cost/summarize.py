@@ -8,6 +8,7 @@ import csv
 import json
 import pathlib
 import statistics
+from datetime import datetime
 from typing import Any, Iterable, Mapping
 
 
@@ -70,6 +71,37 @@ def quality_reviewer_idle(quality: Mapping[str, Any]) -> float | int | None:
     return duration_from(quality, "reviewer_idle_queue_ms", "idle_reviewer_queue_ms", "review_queue_wait_ms")
 
 
+def independent_review(run_dir: pathlib.Path) -> Mapping[str, Any]:
+    """Read the review receipt without treating a missing receipt as zero work."""
+    for path in (run_dir / "independent-review" / "review.json", run_dir / "review.json"):
+        value = read(path)
+        if isinstance(value, Mapping):
+            return value
+    return {}
+
+
+def parse_utc(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def elapsed_ms(start: Any, end: Any) -> float | None:
+    started = parse_utc(start)
+    finished = parse_utc(end)
+    if started is None or finished is None:
+        return None
+    value = (finished - started).total_seconds() * 1000
+    return round(value, 3) if value >= 0 else None
+
+
 def quality_acceptance(quality: Mapping[str, Any]) -> tuple[bool | None, str]:
     """Require explicit machine and independent-review evidence for accepted."""
     if quality.get("status") != "passed":
@@ -115,10 +147,21 @@ def stats(values: Iterable[Any]) -> dict[str, Any]:
     return {"count": len(clean), "median_ms": statistics.median(clean) if clean else None, "range_ms": [min(clean), max(clean)] if clean else None}
 
 
+def count_stats(values: Iterable[Any]) -> dict[str, Any]:
+    """Summarize a count-valued measure without attaching millisecond units."""
+    clean = [value for value in values if number(value) is not None]
+    return {
+        "sample_count": len(clean),
+        "median_edits": statistics.median(clean) if clean else None,
+        "range_edits": [min(clean), max(clean)] if clean else None,
+    }
+
+
 def make_row(spec: Mapping[str, Any], case: Mapping[str, Any], run_dir: pathlib.Path) -> dict[str, Any]:
     summary = read(run_dir / "summary.json")
     quality = read(run_dir / "quality.json", {})
     setup = read(run_dir / "run-setup.json")
+    review = independent_review(run_dir)
     observed = isinstance(summary, Mapping)
     summary = summary if observed else {}
     quality = quality if isinstance(quality, Mapping) else {}
@@ -129,6 +172,8 @@ def make_row(spec: Mapping[str, Any], case: Mapping[str, Any], run_dir: pathlib.
     diagnostic_ms = quality_first_snapshot_audit(quality)
     idle_ms = quality_reviewer_idle(quality)
     accepted, acceptance_reason = quality_acceptance(quality) if quality else (None, "quality evidence pending")
+    reviewed_at_utc = review.get("reviewed_at_utc")
+    dispatch_to_review_wall_ms = elapsed_ms(summary.get("process_started_observed_utc"), reviewed_at_utc)
     components = {"setup_ms": setup_ms, "author_process_execution_ms": author_ms, "final_machine_verification_ms": machine_ms, "independent_review_ms": independent_ms}
     missing = [key for key, value in components.items() if value is None]
     observed_subtotal = sum(value for key, value in components.items() if key != "setup_ms" and value is not None) if any(value is not None for key, value in components.items() if key != "setup_ms") else None
@@ -155,13 +200,18 @@ def make_row(spec: Mapping[str, Any], case: Mapping[str, Any], run_dir: pathlib.
         "setup_duration_ms": setup_ms, "final_machine_verification_ms": machine_ms, "independent_review_ms": independent_ms,
         "final_review_ms": independent_ms,
         "diagnostic_first_snapshot_ms": diagnostic_ms, "reviewer_idle_queue_ms": idle_ms, "observed_accepted_subtotal_ms": observed_subtotal,
-        "accepted_total_ms": accepted_total, "accepted_timing_status": timing_status, "accepted_status": "accepted" if accepted is True else "rejected" if accepted is False else "unknown",
+        # accepted_total_ms is retained for report compatibility. It is the
+        # active-work sum, not dispatch-to-review wall time.
+        "accepted_total_ms": accepted_total, "accepted_active_work_ms": accepted_total, "accepted_timing_basis": "active_work_sum",
+        "accepted_timing_status": timing_status, "accepted_status": "accepted" if accepted is True else "rejected" if accepted is False else "unknown",
         "accepted_reason": acceptance_reason, "accepted_missing_components": missing, "candidate_versions": candidate_count, "complete_candidate_versions": complete_count,
+        "reviewed_at_utc": reviewed_at_utc, "dispatch_to_independent_review_wall_ms": dispatch_to_review_wall_ms,
+        "dispatch_to_accepted_wall_ms": dispatch_to_review_wall_ms if accepted is True else None,
         "repair_edits": number(quality.get("repair_edits")), "command_count": number(summary.get("command_interval_count")), "tool_union_ms": number(summary.get("command_union_ms")),
         "tool_accumulated_ms": number(summary.get("command_accumulated_ms")), "tool_overlap_ms": number(summary.get("command_overlap_ms")), "model_rounds": None,
         "same_file_reads": quality.get("same_file_reads"), "same_range_reads": quality.get("same_range_reads"), "git_calls": quality.get("git_calls"), "browser_ms": quality.get("browser_ms"),
         "input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens"), "cached_input_tokens": usage.get("cached_input_tokens"), "reasoning_output_tokens": usage.get("reasoning_output_tokens"), "cost": None,
-        "native_receipt_stages": receipt_stages(run_dir), "native_receipt_timings_separate": True, "observer_start_utc": summary.get("observer_start_utc"), "process_exit_observed_utc": summary.get("process_exit_observed_utc"),
+        "native_receipt_stages": receipt_stages(run_dir), "native_receipt_timings_separate": True, "observer_start_utc": summary.get("observer_start_utc"), "process_started_observed_utc": summary.get("process_started_observed_utc"), "process_exit_observed_utc": summary.get("process_exit_observed_utc"),
     }
 
 
@@ -170,18 +220,25 @@ def group_report(rows: list[dict[str, Any]], case: Mapping[str, Any], variant: s
     process_completed = [row["process_completed_ms"] for row in group if row["process_completed"]]
     accepted_author = [row["accepted_author_execution_ms"] for row in group if row["accepted_author_execution_ms"] is not None]
     accepted = [row["accepted_total_ms"] for row in group if row["accepted_total_ms"] is not None]
+    reviewed_wall = [row.get("dispatch_to_independent_review_wall_ms") for row in group if row.get("dispatch_to_independent_review_wall_ms") is not None]
+    accepted_wall = [row.get("dispatch_to_accepted_wall_ms") for row in group if row.get("dispatch_to_accepted_wall_ms") is not None]
     repairs = [row["repair_edits"] for row in group if number(row["repair_edits"]) is not None]
     process_stats = stats(process_completed)
     accepted_author_stats = stats(accepted_author)
     accepted_stats = stats(accepted)
+    reviewed_wall_stats = stats(reviewed_wall)
+    accepted_wall_stats = stats(accepted_wall)
     return {
         "case_id": case.get("id"), "cohort": case.get("cohort"), "variant": variant, "registered_attempts": len(group),
         "observed_attempts": sum(row["registered_status"] == "observed" for row in group), "pending_attempts": sum(row["registered_status"] == "pending" for row in group),
-        "all_samples": stats(row["process_execution_ms"] for row in group), "process_completed": process_stats, "accepted_author": accepted_author_stats, "accepted": accepted_stats,
+        "all_samples": stats(row["process_execution_ms"] for row in group), "process_completed": process_stats, "accepted_author": accepted_author_stats,
+        "accepted_active_work": accepted_stats, "accepted": accepted_stats, "dispatch_to_independent_review_wall": reviewed_wall_stats, "accepted_dispatch_wall": accepted_wall_stats,
         "process_completed_median_ms": process_stats["median_ms"], "process_completed_range_ms": process_stats["range_ms"],
         "accepted_author_median_ms": accepted_author_stats["median_ms"], "accepted_author_range_ms": accepted_author_stats["range_ms"],
+        "accepted_active_work_median_ms": accepted_stats["median_ms"], "accepted_active_work_range_ms": accepted_stats["range_ms"],
+        "accepted_dispatch_wall_median_ms": accepted_wall_stats["median_ms"], "accepted_dispatch_wall_range_ms": accepted_wall_stats["range_ms"],
         "first_pass": sum(row["first_quality_status"] == "passed" for row in group), "final_pass": sum(row["quality_status"] == "passed" for row in group),
-        "final_fail": sum(row["quality_status"] == "failed" for row in group), "timeouts": sum(row["execution_status"] == "timeout" for row in group), "repair_edits": stats(repairs),
+        "final_fail": sum(row["quality_status"] == "failed" for row in group), "timeouts": sum(row["execution_status"] == "timeout" for row in group), "repair_edits": count_stats(repairs),
         "diagnostic_first_snapshot_ms": stats(row["diagnostic_first_snapshot_ms"] for row in group), "reviewer_idle_queue_ms": stats(row["reviewer_idle_queue_ms"] for row in group),
         "accepted_timing_incomplete": sum(row["accepted_timing_status"].startswith("incomplete_") for row in group),
     }
@@ -192,8 +249,13 @@ def equal_task_comparisons(groups: list[dict[str, Any]], tasks: list[Mapping[str
     for case in tasks:
         by = {group["variant"]: group for group in groups if group["case_id"] == case.get("id")}
         for baseline in ("A", "B"):
-            candidate = by.get("C", {}).get("accepted", {}).get("median_ms"); base = by.get(baseline, {}).get("accepted", {}).get("median_ms")
-            output.append({"case_id": case.get("id"), "cohort": case.get("cohort"), "comparison": f"C/{baseline}", "candidate_accepted_median_ms": candidate, "baseline_accepted_median_ms": base,
+            candidate_group = by.get("C", {}); baseline_group = by.get(baseline, {})
+            candidate = candidate_group.get("accepted_active_work", {}).get("median_ms"); base = baseline_group.get("accepted_active_work", {}).get("median_ms")
+            candidate_wall = candidate_group.get("accepted_dispatch_wall", {}).get("median_ms"); base_wall = baseline_group.get("accepted_dispatch_wall", {}).get("median_ms")
+            output.append({"case_id": case.get("id"), "cohort": case.get("cohort"), "comparison": f"C/{baseline}", "weight": 1, "weighting": "equal_task",
+                "candidate_accepted_median_ms": candidate, "baseline_accepted_median_ms": base,
+                "candidate_accepted_active_work_median_ms": candidate, "baseline_accepted_active_work_median_ms": base,
+                "candidate_dispatch_to_accepted_wall_median_ms": candidate_wall, "baseline_dispatch_to_accepted_wall_median_ms": base_wall,
                 "accepted_only_difference_ms": candidate - base if candidate is not None and base is not None else None,
                 "accepted_only_change_percent": 100 * (candidate / base - 1) if candidate is not None and base not in (None, 0) else None,
                 "limitation": "Equal-task accepted timing is conditional on explicit final machine and independent-review evidence; pending or incomplete samples remain visible."})
@@ -233,7 +295,8 @@ def main(argv: list[str] | None = None) -> int:
         with (args.output / "runs.csv").open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=list(rows[0])); writer.writeheader(); writer.writerows(rows)
     groups = [group_report(rows, case, variant) for case in tasks for variant in ("A", "B", "C")]
-    stage_summary = {"groups": groups, "comparisons": equal_task_comparisons(groups, tasks), "registered_attempts": len(manifest.get("runs", [])), "observed_attempts": sum(row["registered_status"] == "observed" for row in rows), "pending_attempts": sum(row["registered_status"] == "pending" for row in rows), "weights": "equal per task; no pooled difficulty-weighted latency", "model_rounds": None, "unavailable_metrics": ["model_rounds", "pure_model_reasoning_time", "read_ranges_without_explicit_event", "continuous_dispatch_to_acceptance_queue_time"], "accepted_timing_rule": "setup + author execution + final machine verification + independent review; null when any component or explicit acceptance evidence is missing", "native_receipt_rule": "native CLI receipt stage timings are reported separately and never added to observer wall or command union"}
+    comparisons = equal_task_comparisons(groups, tasks)
+    stage_summary = {"groups": groups, "comparisons": comparisons, "equal_task_comparisons": comparisons, "registered_attempts": len(manifest.get("runs", [])), "observed_attempts": sum(row["registered_status"] == "observed" for row in rows), "pending_attempts": sum(row["registered_status"] == "pending" for row in rows), "weights": "equal per task; no pooled difficulty-weighted latency", "model_rounds": None, "unavailable_metrics": ["model_rounds", "pure_model_reasoning_time", "read_ranges_without_explicit_event"], "accepted_timing_rule": "accepted_total_ms is the compatibility alias for active-work sum: setup + author execution + final machine verification + independent review; null when any component or explicit acceptance evidence is missing", "accepted_wall_clock_rule": "dispatch_to_accepted_wall_ms is process_started_observed_utc to independent review reviewed_at_utc, includes review queue/wait, and remains null unless acceptance is explicit; it is not added to active-work cost", "native_receipt_rule": "native CLI receipt stage timings are reported separately and never added to observer wall or command union"}
     (args.output / "stage-summary.json").write_text(json.dumps(stage_summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"); write_timeline(args.output, timeline)
     print(json.dumps({"attempts": len(rows), "registered_attempts": len(manifest.get("runs", [])), "pending_attempts": stage_summary["pending_attempts"], "output": str(args.output)})); return 0
 
