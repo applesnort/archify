@@ -1,6 +1,9 @@
-<p align="center"><img src="docs/assets/archify-mark.svg" alt="Archify" width="160" height="144" /></p>
-
-<h1 align="center">Archify</h1>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/archify-lockup-dark.svg" />
+    <img src="docs/assets/archify-lockup-light.svg" alt="Archify" width="440" height="121" />
+  </picture>
+</p>
 <h3 align="center">把代码、想法和流程，变成可以探索、讲解和分享的图。</h3>
 
 <p align="center">在你熟悉的 AI Agent 中描述需求，或让它阅读代码仓库。Archify 生成独立的交互式 HTML：点击查看细节、追踪关键路径、逐步讲解，再把完整成品分享给别人。</p>

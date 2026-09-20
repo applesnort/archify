@@ -1,6 +1,9 @@
-<p align="center"><img src="docs/assets/archify-mark.svg" alt="Archify" width="160" height="144" /></p>
-
-<h1 align="center">Archify</h1>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/archify-lockup-dark.svg" />
+    <img src="docs/assets/archify-lockup-light.svg" alt="Archify" width="440" height="121" />
+  </picture>
+</p>
 <h3 align="center">Turn code, ideas, and workflows into diagrams you can explore and share.</h3>
 
 <p align="center">Describe a system in your favorite AI agent, or ask it to read a repository. Archify creates a self-contained interactive HTML diagram: explore details, follow a request, walk through a story, and share the whole artifact.</p>

@@ -119,11 +119,10 @@ test('README motion proof is compact, looping, and backed by current gallery art
 test('all README languages show the brand mark and retain the verified animated proof', () => {
   for (const filename of ['README.md', 'README_EN.md', 'README_ZH.md']) {
     const readme = fs.readFileSync(path.join(repoRoot, filename), 'utf8');
-    const markIndex = readme.indexOf('docs/assets/archify-mark.svg');
-    const titleIndex = readme.indexOf('<h1 align="center">Archify</h1>');
+    const markIndex = readme.indexOf('docs/assets/archify-lockup-light.svg');
     const proofIndex = readme.indexOf('docs/assets/archify-live-proof.gif');
     const demosIndex = Math.max(readme.indexOf('## See Archify in action'), readme.indexOf('## 看看 Archify 能做什么'));
-    assert.ok(markIndex >= 0 && markIndex < titleIndex, `${filename}: brand mark is not above the title`);
+    assert.ok(markIndex >= 0 && markIndex < demosIndex, `${filename}: brand lockup is missing before the demos`);
     assert.ok(proofIndex > demosIndex, `${filename}: animated proof must live in the demo section`);
     assert.match(readme, /docs\/assets\/archify-live-proof\.gif/);
     assert.match(readme, /https:\/\/tt-a1i\.github\.io\/archify\/gallery\.html/);
@@ -182,7 +181,7 @@ test('README demos use checked-in captures and live deep links below the existin
 
   for (const filename of ['README.md', 'README_EN.md', 'README_ZH.md']) {
     const readme = fs.readFileSync(path.join(repoRoot, filename), 'utf8');
-    const markIndex = readme.indexOf('docs/assets/archify-mark.svg');
+    const markIndex = readme.indexOf('docs/assets/archify-lockup-light.svg');
     const proofIndex = readme.indexOf('docs/assets/archify-live-proof.gif');
     const previewIndex = Math.max(readme.indexOf('## Preview'), readme.indexOf('## 预览'));
     const demosIndex = Math.max(readme.indexOf('## See Archify in action'), readme.indexOf('## 看看 Archify 能做什么'));
@@ -199,7 +198,8 @@ test('README demos use checked-in captures and live deep links below the existin
 
 test('README preserves the visual proof set and key content', () => {
   const commonAssets = [
-    'archify-mark.svg',
+    'archify-lockup-light.svg',
+    'archify-lockup-dark.svg',
     'archify-readme-hero.png',
     'archify-live-proof.gif',
     'archify-demo-story.png',
