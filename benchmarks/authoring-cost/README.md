@@ -51,7 +51,23 @@ commands remain unclassified and raw events are unchanged.
 
 `fixed-json.py --manifest <manifest> --candidate <json> --repo-root <source>
 --output <new-directory> --chrome <executable>` compares the same supported
-validate/deliver/strict-check/visual-check pipeline on A/B/C. It retains one
+validate/deliver/check/visual-check stages on A/B/C. It retains one
 warmup and three balanced repetitions, including failures. Run it without
 concurrent author or regression workloads. It is separate from the ordinary
 author's native CLI path and from semantic/perceptual acceptance.
+
+Legacy A accepts no options on `check` and only `--json` on `visual-check`.
+Its successful native `deliver` stdout binds specification and artifact hashes;
+the harness verifies these hashes for every fixed-input variant. B/C additionally
+require their persistent provenance sidecars. The original fixed-input attempts
+that sent unsupported flags to A remain recorded as adapter failures. Corrected
+comparisons use new output directories and do not consume new author attempts.
+
+For A author artifacts, common B inspection omits the unavailable provenance
+requirement, records that capability gap, and binds identity from captured native
+delivery output, actual bytes, and target revision. It never creates a synthetic
+delivery sidecar. `--out-name machine-review-compatible` retains a post-hoc audit
+beside the original report. B's rerendered JSON geometry is diagnostic for A;
+actual A artifact checks and its native browser result remain authoritative for
+A-native acceptance. Native policies differ on readable vertical scrolling;
+report this difference separately from timing and semantic quality.

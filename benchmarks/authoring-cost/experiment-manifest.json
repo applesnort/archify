@@ -17,7 +17,7 @@
       "package_sha256": "5408149ccf8f3361515abfe0024b3782068f37fb8fe0e790d5571dcf9ad6d60d"
     },
     "C": {
-      "sha": "e85fda53106a0804df182613ed11c9d44c063888",
+      "sha": "cbf57445065f19d3643be895b488e2ae3df857c1",
       "role": "candidate",
       "branch": "codex/authoring-cost-20260920",
       "package_path": "/private/tmp/archify-authoring-20260920-evidence/C.zip",
@@ -393,6 +393,21 @@
       "after_run": "dev-02-B",
       "change": "record setup wall duration in run-setup.json for all subsequent runs; observational only",
       "disposition": "earlier setup durations unknown; report observed author/review subtotals and do not fabricate full totals"
+    },
+    {
+      "before_run": "dev-01-C",
+      "change": "Candidate snapshot includes updated existing text-contract test and regenerated committed archive",
+      "previous_candidate_sha": "e85fda53106a0804df182613ed11c9d44c063888",
+      "candidate_sha": "cbf57445065f19d3643be895b488e2ae3df857c1",
+      "package_bytes_changed": false,
+      "scope": "No instruction/example/runtime changes after e85fda5; C author runs not started"
+    },
+    {
+      "recorded_at": "2026-09-20T05:56:59.610646+00:00",
+      "before_holdout": true,
+      "change": "Use supported legacy A acceptance commands and observed inline deliver hashes; no nonexistent --require-provenance or --out-dir flags for A. Common B inspection of unchanged A artifacts omits sidecar requirement and records unknown persistent provenance; native source/acceptance plus independent semantic checks remain required. B rerender geometry of A JSON is diagnostic rather than substituting for actual A artifact metrics.",
+      "reason": "A check rejects all options, has no persistent delivery sidecar; old common/fixed A adapter failures were capability errors, not quality failures.",
+      "retention": "All original attempts retained. Corrected fixed-input and supplemental A checks use new directories; no replacement author run. B/C author path and gate checks unchanged."
     }
   ]
 }
