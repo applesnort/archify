@@ -126,7 +126,7 @@ The output is a self-contained HTML file. Download it and open it in your browse
 
 - **#1 on GitHub Trending's weekly, all-language repository list.** [Ranking screenshot published by the creator on September 1, 2026](https://x.com/t20000622yy/status/2094656813576880285), with all languages and “This week” selected.
 - **Featured and interviewed by QbitAI.** [Project feature](https://www.qbitai.com/2026/09/482469.html) · [The developer's story](https://www.qbitai.com/2026/09/488519.html).
-- **Shared with developer communities.** [HelloGitHub, volume 124](https://hellogithub.com/en/periodical/volume/124) · [midudev's post](https://x.com/midudev/status/2094425974406320207).
+- **Shared with developer communities.** [midudev's post](https://x.com/midudev/status/2094425974406320207).
 
 <sub>A selection of public coverage, community shares, and historical milestones. Follow the links for dates and sources.</sub>
 

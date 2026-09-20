@@ -126,7 +126,7 @@ Archify 追踪 [`mco-org/mco`](https://github.com/mco-org/mco) 的 `9f1a1cf` 版
 
 - **GitHub Trending 全球仓库周榜第一。** [作者于 2026 年 9 月 1 日发布的榜单截图](https://x.com/t20000622yy/status/2094656813576880285)，筛选为所有语言、This week。
 - **量子位报道与人物采访。** [项目报道](https://www.qbitai.com/2026/09/482469.html) · [开发者故事](https://www.qbitai.com/2026/09/488519.html)。
-- **开发者社区推荐。** [HelloGitHub 第 124 期](https://hellogithub.com/en/periodical/volume/124) · [midudev 分享](https://x.com/midudev/status/2094425974406320207)。
+- **开发者社区推荐。** [midudev 分享](https://x.com/midudev/status/2094425974406320207)。
 
 <sub>这里选列部分公开报道、分享与历史里程碑；排名日期及来源见链接。</sub>
 
