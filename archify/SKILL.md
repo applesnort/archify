@@ -12,7 +12,7 @@ metadata:
 
 Create an interactive HTML diagram from typed JSON. Static output is the default; enable motion only when requested.
 
-For a real codebase, read [Repository authoring](references/repository-authoring.md) for source exploration. Select the Architecture example in the Type router before loading its content. A system description uses the steps below; an existing JSON uses the handoff path.
+For a real codebase, read [Repository authoring](references/repository-authoring.md) for exploration and example selection. A system description uses the steps below; an existing JSON uses the handoff path.
 
 ## Existing candidate handoff
 
@@ -25,7 +25,7 @@ The update check is outside the delivery critical path. A harness may start it c
 Use this bounded path for ordinary generation. Do not read the optional Viewer Runtime reference unless the user asks about those features.
 
 1. Choose `architecture`, `workflow`, `sequence`, `dataflow`, or `lifecycle` from the question.
-2. Use the exact paths in the Type router; do not list `schemas/` or `examples/` first. For Architecture, select the matching example in the Type router, then read it with `references/authoring-defaults.md` in one parallel batch; examples include boundaries, guided views, and conclusion cards. For Workflow, read defaults and its starter together. Read the relevant schema definition for any new field, enum choice, or constrained text; an example shows shape, not every allowed value or length. Boundary kinds and guided-view notes need their schema constraints before writing. For Sequence, Dataflow, and Lifecycle, read defaults, schema, common schema, and example together. Fresh authorship means new IDs, domain wording, and layout; examples provide shape, not facts. Do not run help, doctor, validate a starter, create a temporary diagram, pre-create/list output paths, or query brands. Only for explicitly requested branded marks may you query `node bin/archify.mjs brands "<name>" --json`; read `references/brand-marks.md` only for an unknown brand with a user-provided URL.
+2. Use the exact paths in the Type router; do not list `schemas/` or `examples/` first. For Architecture, select the matching showcase example in the Type router before loading it with `references/authoring-defaults.md` in one parallel batch; it includes boundaries, guided views, and conclusion cards. For Workflow, read defaults and its starter together. Read the relevant schema definition for any new field, enum choice, or constrained text; an example shows shape, not every allowed value or length. Boundary kinds and guided-view notes need their schema constraints before writing. For Sequence, Dataflow, and Lifecycle, read defaults, schema, common schema, and example together. Fresh authorship means new IDs, domain wording, and layout; examples provide shape, not facts. Do not run help, doctor, validate a starter, create a temporary diagram, pre-create/list output paths, or query brands. Only for explicitly requested branded marks may you query `node bin/archify.mjs brands "<name>" --json`; read `references/brand-marks.md` only for an unknown brand with a user-provided URL.
 3. Artifact first: once requested scope and source evidence are covered, write the candidate directly; do not plan coordinates in prose. Let the real system determine the number of nodes and relationships: keep separate nodes when merging would hide a responsibility, boundary, trust boundary, protocol, lifecycle, ownership, or persistence seam; group only unified concerns. Never use node, relationship, source-reference, view, card, or boundary counts as an authoring target, ceiling, or performance lever. Audit responsibility ownership rather than counts: keep an evidence-backed controller, broker, runtime, or supervisor separate when it manages multiple participants and merging would hide control-plane ownership or lifecycle. Keep an external caller or client separate from the gateway, relay, or service when source distinguishes runtimes or trust; a transport is not its user. Never use shared source citations as a substitute for an omitted role; omit only roles absent in code. For a repository showcase, add curated `meta.views` for distinct reader questions and evidence-backed conclusion cards for material takeaways; every aid must improve comprehension, with no quota. Set `meta.quality_profile` to `"showcase"` unless the user requests dense `standard`. Keep forward flow monotonic where practical, branches beside their owner, shared stores outside the main lane, and feedback paths on the perimeter; wrap broad systems into meaningful rows. Leave clear gaps for actual relationship labels and add whitespace rather than route controls. On the first draft, let the renderer route every connection: omit `via`, `route`, `fromSide`, `toSide`, `channelX`, `channelY`, `labelAt`, `labelDx`, `labelDy`, and `labelSegment` unless the user supplied that exact route intent. Add the smallest control only after a measured diagnostic.
 4. Once the complete first candidate is written, run `finalize` directly. Its first gate is showcase validation; successful first drafts need no separate pre-validation. Keep the candidate unchanged while the command runs:
 
@@ -52,23 +52,13 @@ Do not read `bin/` implementation, renderer or validator source, tests, or bench
 
 | Type | Use for | Schema | Example |
 |---|---|---|---|
-| `architecture` | Components, services, cloud/security boundaries, infrastructure | `schemas/architecture.schema.json` | System description: `examples/web-app.architecture.json`; repository: select below |
+| `architecture` | Components, services, cloud/security boundaries, infrastructure | `schemas/architecture.schema.json` | Systems/services (including CLI servers): `examples/web-app.architecture.json`; library/API or CLI data processing: `examples/source-to-diagram/source-to-diagram.architecture.json`; deployment: `examples/production-deployment.architecture.json` |
 | `workflow` | Processes, approval gates, tool calls, runbooks, CI/CD | `schemas/workflow.schema.json` | `examples/starter.workflow.json` |
 | `sequence` | API call chains, request lifecycles, async traces, returns | `schemas/sequence.schema.json` | `examples/cache-miss-request.sequence.json` |
 | `dataflow` | Pipelines, ETL/ELT, lineage, governance, consumers | `schemas/dataflow.schema.json` | `examples/product-analytics.dataflow.json` |
 | `lifecycle` | State/status transitions, retries, waiting and terminal states | `schemas/lifecycle.schema.json` | `examples/deployment-release.lifecycle.json` |
 
 When ambiguous, run `node bin/archify.mjs guide "<scenario>" --json`. Scenario proof examples are structural references, not facts to copy.
-
-### Repository Architecture example selection
-
-Select the main example before its first content load, using the request and repository metadata already needed for source inspection:
-
-- Library APIs or command-line data processing: `examples/source-to-diagram/source-to-diagram.architecture.json`.
-- Request/service/storage systems, including a service launched by a CLI: `examples/web-app.architecture.json`.
-- Deployment boundaries: `examples/production-deployment.architecture.json`.
-
-For mixed or unclear tasks, use the requested responsibilities and entry points as they become known in normal inspection; keep their actual roles. Selection fits the existing read batch and needs no extra message, command, or repository-wide scan. Read another example when a necessary capability remains unexplained. Examples teach shape, not facts: a library need not acquire filesystem nodes, and finished showcases still follow the automatic-routing first-draft rule.
 
 ## Mermaid input
 

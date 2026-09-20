@@ -52,12 +52,15 @@ the affected entry points, configuration, dependencies, and evidence.
 
 ## Choose an example by structure
 
-Select the main example before loading its content using the
-[Repository Architecture example selection](../SKILL.md#repository-architecture-example-selection)
-in the Type router. Apply that selection in the existing reading batch; use
-additional examples only for necessary capabilities the selected one does not
-explain. Preserve the system's actual roles rather than fitting an example's
-topology.
+Select the main example in the [Type router](../SKILL.md#type-router) before
+loading its content, using the request and repository metadata already needed
+for source inspection. Selection fits the existing read batch and needs no extra
+message, command, or repository-wide scan. For mixed or unclear tasks, use the
+requested responsibilities and entry points as they become known in normal
+inspection; keep their actual roles. Read another example when a necessary
+capability remains unexplained. Examples teach shape, not facts: a library need
+not acquire filesystem nodes, and finished showcases still follow the
+first-draft automatic-routing rule.
 
 ## Author from evidence
 
