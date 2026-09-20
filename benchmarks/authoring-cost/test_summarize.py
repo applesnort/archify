@@ -50,6 +50,7 @@ class SummarizeTests(unittest.TestCase):
             accepted = next(row for row in rows if row["run_id"] == "case-C")
             self.assertEqual(accepted["accepted_total_ms"], 300)
             self.assertEqual(accepted["observed_accepted_subtotal_ms"], 250)
+            self.assertEqual(accepted["observed_non_setup_work_ms"], 250)
             self.assertEqual(accepted["accepted_active_work_ms"], 300)
             self.assertEqual(accepted["dispatch_to_independent_review_wall_ms"], 2500.0)
             self.assertEqual(accepted["dispatch_to_accepted_wall_ms"], 2500.0)
@@ -58,6 +59,8 @@ class SummarizeTests(unittest.TestCase):
             stage = json.loads((output / "stage-summary.json").read_text())
             self.assertEqual(stage["registered_attempts"], 3)
             self.assertEqual(stage["pending_attempts"], 1)
+            self.assertIn("same_file_reads", stage["unavailable_metrics"])
+            self.assertIn("cost", stage["unavailable_metrics"])
             self.assertIsNone(stage["comparisons"][0]["accepted_only_difference_ms"])
             c_group = next(group for group in stage["groups"] if group["case_id"] == "case" and group["variant"] == "C")
             self.assertEqual(c_group["dispatch_to_independent_review_wall"]["median_ms"], 2500.0)
@@ -79,6 +82,24 @@ class SummarizeTests(unittest.TestCase):
         accepted, reason = summarize.quality_acceptance(quality)
         self.assertIsNone(accepted)
         self.assertIn("independent-review", reason)
+
+    def test_unknown_quality_and_gates_are_not_reported_as_failed_acceptance(self):
+        accepted, reason = summarize.quality_acceptance({"status": "unknown", "native_acceptance": "unknown"})
+        self.assertIsNone(accepted)
+        self.assertIn("unknown", reason)
+        self.assertIsNone(summarize.status_value("unknown"))
+
+    def test_group_reports_first_and_final_unknown_separately(self):
+        rows = [
+            {"case_id": "case", "variant": "C", "registered_status": "observed", "execution_status": "completed", "quality_status": "unknown", "first_quality_status": "unknown", "process_completed": False, "process_execution_ms": 10, "process_completed_ms": None, "accepted_author_execution_ms": None, "accepted_total_ms": None, "dispatch_to_accepted_wall_ms": None, "repair_edits": None, "diagnostic_first_snapshot_ms": None, "reviewer_idle_queue_ms": None, "accepted_timing_status": "not_accepted"},
+            {"case_id": "case", "variant": "C", "registered_status": "observed", "execution_status": "completed", "quality_status": "failed", "first_quality_status": "failed", "process_completed": True, "process_execution_ms": 20, "process_completed_ms": 20, "accepted_author_execution_ms": None, "accepted_total_ms": None, "dispatch_to_accepted_wall_ms": None, "repair_edits": 1, "diagnostic_first_snapshot_ms": None, "reviewer_idle_queue_ms": None, "accepted_timing_status": "not_accepted"},
+        ]
+        group = summarize.group_report(rows, {"id": "case", "cohort": "holdout"}, "C")
+        self.assertEqual(group["first_fail"], 1)
+        self.assertEqual(group["first_unknown"], 1)
+        self.assertEqual(group["final_fail"], 1)
+        self.assertEqual(group["final_unknown"], 1)
+        self.assertEqual(group["final_not_accepted"], 2)
 
     def test_process_completion_is_separate_from_accepted_author_timing(self):
         with tempfile.TemporaryDirectory() as temp:

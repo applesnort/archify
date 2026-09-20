@@ -132,9 +132,19 @@ def assemble_run(directory: Path, sessions: Path) -> dict[str, Any] | None:
     semantic_status, visual_status, independent = review_status(review)
     accepted = native == "passed" and common == "passed" and independent == "passed" and repairs is not None and repairs <= 3 and summary.get("timed_out") is not True
     protocol = "passed" if repairs is not None and repairs <= 3 else "failed" if repairs is not None else "unknown"
+    explicit_failure = (
+        native == "failed"
+        or common == "failed"
+        or independent == "failed"
+        or protocol == "failed"
+        or summary.get("timed_out") is True
+    )
     quality = dict(previous)
     quality.update(
-        status="passed" if accepted else "failed",
+        # Missing evidence leaves the final result unknown; only an explicit
+        # hard-gate failure (or timeout/repair limit) makes it failed. Neither
+        # state can be mistaken for a successful accepted artifact.
+        status="failed" if explicit_failure else "passed" if accepted else "unknown",
         native_acceptance=native,
         common_acceptance=common,
         semantic=review.get("semantic", {"status": semantic_status}),

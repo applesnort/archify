@@ -22,7 +22,7 @@ Only the ordinary prompt, selected packaged Skill, target source, and common exe
 
 The first observed complete JSON and all subsequent versions are preserved. Completion requires independent source entailment, full requested semantic coverage, native acceptance and common validation, and actual visual review. A quick first JSON, CLI exit zero, or correct citation line existence alone does not satisfy that definition. Evaluation time is recorded separately and included when discussing total accepted delivery cost. First-pass quality is evaluated on the first complete snapshot, not the final repaired candidate.
 
-Raw events, screenshots, authentication homes and original artifacts remain outside this repository. Checked-in reports contain redacted indices, hashes and derived observations. The runner does not install or update any live Skill and never merges or pushes branches.
+Public events, screenshots and original artifacts remain outside this repository. Authentication homes remain private and are never exported. Checked-in reports contain redacted indices, hashes and derived observations. The runner does not install or update any live Skill and never merges or pushes branches.
 
 ## Review and reporting
 
@@ -84,3 +84,43 @@ producer output hashes with collection on/off and measures the local wrapper
 delta. Run it outside formal author timing. Its tiny synthetic producer measures
 collection mechanics only; it is not a substitute for actual author or renderer
 performance and cannot establish a percentage overhead for long model sessions.
+
+## Reproduce or inspect the retained study
+
+The final `results.md` links the durable evidence directory. Its `report/runs.csv`,
+`report/runs.json`, `report/stage-summary.json`, and `report/timeline.html` retain
+every registered attempt, including rejected, unknown, and environment-affected
+outcomes. A failed or unverified artifact has no accepted delivery latency.
+
+`audit-native-first.py` is a post-hoc, uniform audit of all legacy A first
+snapshots. Run it only after all registered authors terminate. It verifies the
+frozen A package, candidate bytes and target commit before native validation,
+and writes to a new output directory. An explicit native validation failure
+establishes first-draft failure; validation success alone does not establish
+semantic or browser acceptance. This is separate diagnostic work, never a new
+author sample or a replacement for an original failure.
+
+Read-count, exact read-range, Git-internal, model-round, browser-substage and
+monetary-cost measurements that the public event interface cannot expose remain
+null. Command counts and the union/overlap of observed command intervals are
+available, but stdout buffering limits timing precision. Native receipt stage
+durations are reported separately; never add them again to their enclosing
+author process time. Token usage may include repeated/cached context and is not
+a count of unique source tokens. No unobserved model thinking is inferred.
+
+To rerun outside the original paths, copy the manifest to a new study directory,
+point each variant's `package_path` to its retained ZIP (preserve and verify its
+hash), clone each task's retained `target_bundle` into a fresh target directory,
+check out its exact `target_repo_sha`, and update only `target_repo` and bundle
+paths. Use empty session/evidence directories. Run the same host preflight first;
+a different host or CLI/model configuration is a new experiment. Do not reuse
+the existing attempt directories or silently count later reruns as part of the
+36 original attempts. The runner copies authentication locally into its isolated
+private home; never copy an old auth home from the evidence archive.
+
+`compare-results.py --report <report-output> --evidence <private-output>` adds
+`analysis.json`. For each task it takes the median of the three repetitions,
+computes `median(C) / median(baseline) - 1`, then averages the three task-relative
+changes with equal weights. An incomplete task matrix leaves the aggregate
+null; it does not silently drop an unaccepted baseline. Process-only comparisons
+include failed runs and are explicitly not accepted delivery comparisons.

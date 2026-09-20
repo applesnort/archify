@@ -91,24 +91,44 @@ class AssembleQualityTests(unittest.TestCase):
             result = assemble.assemble_run(evidence, sessions)
             quality = json.loads((evidence / "quality.json").read_text())
             self.assertEqual(result["common"], "unknown")
-            self.assertEqual(quality["status"], "failed")
+            self.assertEqual(quality["status"], "unknown")
 
     def test_review_top_level_pass_without_gates_cannot_pass(self):
         with tempfile.TemporaryDirectory() as temp:
             evidence, sessions = self._case(Path(temp), review_gates=False)
             result = assemble.assemble_run(evidence, sessions)
             quality = json.loads((evidence / "quality.json").read_text())
-            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["status"], "unknown")
             self.assertEqual(quality["independent_review_status"], "unknown")
 
-    def test_missing_native_receipt_is_unknown_but_final_quality_fails(self):
+    def test_missing_native_receipt_keeps_final_quality_unknown(self):
         with tempfile.TemporaryDirectory() as temp:
             evidence, sessions = self._case(Path(temp), native=False)
             result = assemble.assemble_run(evidence, sessions)
             quality = json.loads((evidence / "quality.json").read_text())
             self.assertEqual(result["native"], "unknown")
             self.assertEqual(quality["native_acceptance"], "unknown")
+            self.assertEqual(quality["status"], "unknown")
+
+    def test_timeout_remains_an_explicit_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            evidence, sessions = self._case(Path(temp))
+            summary_path = evidence / "summary.json"
+            summary_path.write_text(json.dumps({"candidate_snapshots": [{"complete": True}], "timed_out": True}))
+            result = assemble.assemble_run(evidence, sessions)
+            quality = json.loads((evidence / "quality.json").read_text())
+            self.assertEqual(result["status"], "failed")
             self.assertEqual(quality["status"], "failed")
+
+    def test_old_derived_failure_does_not_override_current_unknown_evidence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            evidence, sessions = self._case(Path(temp), native=False)
+            (evidence / "quality.json").write_text(json.dumps({"status": "failed", "first_candidate": {"status": "failed"}}))
+            result = assemble.assemble_run(evidence, sessions)
+            quality = json.loads((evidence / "quality.json").read_text())
+            self.assertEqual(result["status"], "unknown")
+            self.assertEqual(quality["status"], "unknown")
+            self.assertEqual(quality["first_candidate"]["status"], "failed")
 
     def test_partial_machine_duration_stays_null(self):
         with tempfile.TemporaryDirectory() as temp:

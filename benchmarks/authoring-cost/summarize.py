@@ -38,8 +38,10 @@ def status_value(value: Any) -> bool | None:
         text = value.lower()
         if text in {"passed", "pass", "accepted", "complete", "completed", "ok", "true"}:
             return True
-        if text in {"failed", "fail", "rejected", "pending", "not_evaluated", "unknown", "false"}:
+        if text in {"failed", "fail", "rejected", "false"}:
             return False
+        if text in {"pending", "not_evaluated", "unknown"}:
+            return None
     return None
 
 
@@ -104,8 +106,9 @@ def elapsed_ms(start: Any, end: Any) -> float | None:
 
 def quality_acceptance(quality: Mapping[str, Any]) -> tuple[bool | None, str]:
     """Require explicit machine and independent-review evidence for accepted."""
-    if quality.get("status") != "passed":
-        return (False if quality.get("status") else None), "quality status is not passed"
+    quality_status = quality.get("status")
+    if status_value(quality_status) is False:
+        return False, "quality status is failed"
     # Preferred quality schema: both native/common acceptance and both
     # independent semantic/visual review gates must be explicitly passed.
     semantic = quality.get("semantic") if isinstance(quality.get("semantic"), Mapping) else {}
@@ -116,16 +119,16 @@ def quality_acceptance(quality: Mapping[str, Any]) -> tuple[bool | None, str]:
         status_value(semantic.get("status")),
         status_value(visual.get("status")),
     ]
-    if all(gate is True for gate in gates):
+    if quality_status == "passed" and all(gate is True for gate in gates):
         return True, "native/common acceptance and semantic/visual review passed"
     # Standardized compact schema is accepted as an alternative.
     machine = status_value(quality.get("final_machine_status"))
     review = status_value(quality.get("independent_review_status"))
-    if machine is True and review is True:
+    if quality_status == "passed" and machine is True and review is True:
         return True, "final machine checks and independent review passed"
     if any(gate is False for gate in gates) or machine is False or review is False:
         return False, "an explicit acceptance or review gate failed"
-    return None, "passed quality status lacks explicit acceptance and independent-review gates"
+    return None, "quality acceptance is unknown without explicit passing machine and independent-review gates"
 
 
 def candidate_stats(summary: Mapping[str, Any]) -> tuple[int | None, int | None]:
@@ -199,7 +202,10 @@ def make_row(spec: Mapping[str, Any], case: Mapping[str, Any], run_dir: pathlib.
         "post_json_ms": author_ms - summary.get("pre_first_complete_ms") if author_ms is not None and number(summary.get("pre_first_complete_ms")) is not None else None,
         "setup_duration_ms": setup_ms, "final_machine_verification_ms": machine_ms, "independent_review_ms": independent_ms,
         "final_review_ms": independent_ms,
-        "diagnostic_first_snapshot_ms": diagnostic_ms, "reviewer_idle_queue_ms": idle_ms, "observed_accepted_subtotal_ms": observed_subtotal,
+        "diagnostic_first_snapshot_ms": diagnostic_ms, "reviewer_idle_queue_ms": idle_ms,
+        # Keep the old name for compatibility, but this is not evidence that
+        # the run was accepted; it is the observed non-setup work subtotal.
+        "observed_accepted_subtotal_ms": observed_subtotal, "observed_non_setup_work_ms": observed_subtotal,
         # accepted_total_ms is retained for report compatibility. It is the
         # active-work sum, not dispatch-to-review wall time.
         "accepted_total_ms": accepted_total, "accepted_active_work_ms": accepted_total, "accepted_timing_basis": "active_work_sum",
@@ -237,8 +243,14 @@ def group_report(rows: list[dict[str, Any]], case: Mapping[str, Any], variant: s
         "accepted_author_median_ms": accepted_author_stats["median_ms"], "accepted_author_range_ms": accepted_author_stats["range_ms"],
         "accepted_active_work_median_ms": accepted_stats["median_ms"], "accepted_active_work_range_ms": accepted_stats["range_ms"],
         "accepted_dispatch_wall_median_ms": accepted_wall_stats["median_ms"], "accepted_dispatch_wall_range_ms": accepted_wall_stats["range_ms"],
-        "first_pass": sum(row["first_quality_status"] == "passed" for row in group), "final_pass": sum(row["quality_status"] == "passed" for row in group),
-        "final_fail": sum(row["quality_status"] == "failed" for row in group), "timeouts": sum(row["execution_status"] == "timeout" for row in group), "repair_edits": count_stats(repairs),
+        "first_pass": sum(row["first_quality_status"] == "passed" for row in group),
+        "first_fail": sum(row["first_quality_status"] == "failed" for row in group),
+        "first_unknown": sum(row["first_quality_status"] not in {"passed", "failed"} for row in group),
+        "final_pass": sum(row["quality_status"] == "passed" for row in group),
+        "final_fail": sum(row["quality_status"] == "failed" for row in group),
+        "final_unknown": sum(row["quality_status"] not in {"passed", "failed"} for row in group),
+        "final_not_accepted": sum(row["quality_status"] != "passed" for row in group),
+        "timeouts": sum(row["execution_status"] == "timeout" for row in group), "repair_edits": count_stats(repairs),
         "diagnostic_first_snapshot_ms": stats(row["diagnostic_first_snapshot_ms"] for row in group), "reviewer_idle_queue_ms": stats(row["reviewer_idle_queue_ms"] for row in group),
         "accepted_timing_incomplete": sum(row["accepted_timing_status"].startswith("incomplete_") for row in group),
     }
@@ -350,6 +362,7 @@ function draw() {
   const accepted = run.accepted_status ?? 'unknown';
   brief.textContent = `Author process: ${authorMs} ms · First complete candidate: ${firstMs} ms · Acceptance: ${accepted}`;
   summary.textContent = JSON.stringify(run, null, 2);
+  detail.textContent = 'Select a bar for its observed command.';
   chart.replaceChildren();
 
   if (axisStart === null || axisEnd === null) {
@@ -424,7 +437,7 @@ def main(argv: list[str] | None = None) -> int:
             writer = csv.DictWriter(handle, fieldnames=list(rows[0])); writer.writeheader(); writer.writerows(rows)
     groups = [group_report(rows, case, variant) for case in tasks for variant in ("A", "B", "C")]
     comparisons = equal_task_comparisons(groups, tasks)
-    stage_summary = {"groups": groups, "comparisons": comparisons, "equal_task_comparisons": comparisons, "registered_attempts": len(manifest.get("runs", [])), "observed_attempts": sum(row["registered_status"] == "observed" for row in rows), "pending_attempts": sum(row["registered_status"] == "pending" for row in rows), "weights": "equal per task; no pooled difficulty-weighted latency", "model_rounds": None, "unavailable_metrics": ["model_rounds", "pure_model_reasoning_time", "read_ranges_without_explicit_event"], "accepted_timing_rule": "accepted_total_ms is the compatibility alias for active-work sum: setup + author execution + final machine verification + independent review; null when any component or explicit acceptance evidence is missing", "accepted_wall_clock_rule": "dispatch_to_accepted_wall_ms is process_started_observed_utc to independent review reviewed_at_utc, includes review queue/wait, and remains null unless acceptance is explicit; it is not added to active-work cost", "native_receipt_rule": "native CLI receipt stage timings are reported separately and never added to observer wall or command union"}
+    stage_summary = {"groups": groups, "comparisons": comparisons, "equal_task_comparisons": comparisons, "registered_attempts": len(manifest.get("runs", [])), "observed_attempts": sum(row["registered_status"] == "observed" for row in rows), "pending_attempts": sum(row["registered_status"] == "pending" for row in rows), "weights": "equal per task; no pooled difficulty-weighted latency", "model_rounds": None, "unavailable_metrics": ["model_rounds", "pure_model_reasoning_time", "read_ranges_without_explicit_event", "same_file_reads", "same_range_reads", "git_calls", "browser_ms", "cost"], "accepted_timing_rule": "accepted_total_ms is the compatibility alias for active-work sum: setup + author execution + final machine verification + independent review; null when any component or explicit acceptance evidence is missing", "accepted_wall_clock_rule": "dispatch_to_accepted_wall_ms is process_started_observed_utc to independent review reviewed_at_utc, includes review queue/wait, and remains null unless acceptance is explicit; it is not added to active-work cost", "native_receipt_rule": "native CLI receipt stage timings are reported separately and never added to observer wall or command union"}
     (args.output / "stage-summary.json").write_text(json.dumps(stage_summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"); write_timeline(args.output, timeline)
     print(json.dumps({"attempts": len(rows), "registered_attempts": len(manifest.get("runs", [])), "pending_attempts": stage_summary["pending_attempts"], "output": str(args.output)})); return 0
 
