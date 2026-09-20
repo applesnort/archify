@@ -115,6 +115,41 @@ class SummarizeTests(unittest.TestCase):
             self.assertEqual(row["process_completed_ms"], 123)
             self.assertIsNone(row["accepted_author_execution_ms"])
 
+    def test_adjudicated_review_controls_duration_and_dispatch_end(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            run = root / "run"
+            run.mkdir()
+            (run / "summary.json").write_text(json.dumps({
+                "status": "completed",
+                "returncode": 0,
+                "execution_wall_ms": 100,
+                "process_started_observed_utc": "2026-09-20T07:00:00Z",
+            }))
+            (run / "quality.json").write_text(json.dumps({
+                "status": "passed",
+                "native_acceptance": "passed",
+                "common_acceptance": "passed",
+                "semantic": {"status": "passed"},
+                "visual": {"status": "passed"},
+                "review_duration_ms": 20,
+                "final_machine_duration_ms": 30,
+            }))
+            review_dir = run / "independent-review"
+            review_dir.mkdir()
+            (review_dir / "review.json").write_text(json.dumps({
+                "reviewed_at_utc": "2026-09-20T07:00:02Z",
+                "duration_ms": 20,
+            }))
+            (review_dir / "adjudicated-review.json").write_text(json.dumps({
+                "reviewed_at_utc": "2026-09-20T07:00:07Z",
+                "duration_ms": 70,
+            }))
+            row = summarize.make_row({"run_id": "r", "case_id": "c", "variant": "A", "repeat": 1}, {"id": "c", "cohort": "development"}, run)
+            self.assertEqual(row["independent_review_ms"], 70)
+            self.assertEqual(row["reviewed_at_utc"], "2026-09-20T07:00:07Z")
+            self.assertEqual(row["dispatch_to_independent_review_wall_ms"], 7000.0)
+
     def test_annotation_unwraps_only_exact_shell_reads_and_keeps_compounds_unknown(self):
         self.assertEqual(annotate.classify("/bin/zsh -lc 'cat archify/SKILL.md'")[0], "run_setup")
         self.assertEqual(annotate.classify("/bin/zsh -lc 'rg --files source'")[0], "repo_discovery")

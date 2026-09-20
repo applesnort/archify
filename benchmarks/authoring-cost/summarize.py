@@ -75,7 +75,11 @@ def quality_reviewer_idle(quality: Mapping[str, Any]) -> float | int | None:
 
 def independent_review(run_dir: pathlib.Path) -> Mapping[str, Any]:
     """Read the review receipt without treating a missing receipt as zero work."""
-    for path in (run_dir / "independent-review" / "review.json", run_dir / "review.json"):
+    for path in (
+        run_dir / "independent-review" / "adjudicated-review.json",
+        run_dir / "independent-review" / "review.json",
+        run_dir / "review.json",
+    ):
         value = read(path)
         if isinstance(value, Mapping):
             return value
@@ -171,7 +175,11 @@ def make_row(spec: Mapping[str, Any], case: Mapping[str, Any], run_dir: pathlib.
     setup_ms = setup_duration(setup)
     author_ms = first_number(summary.get("execution_wall_ms"), summary.get("total_wall_ms"))
     machine_ms = quality_machine_duration(quality)
-    independent_ms = quality_independent_duration(quality)
+    # The selected receipt is authoritative for both its duration and end
+    # timestamp; quality.json remains a fallback for older assembled rows.
+    independent_ms = duration_from(review, "duration_ms", "independent_review_duration_ms", "semantic_visual_review_duration_ms")
+    if independent_ms is None:
+        independent_ms = quality_independent_duration(quality)
     diagnostic_ms = quality_first_snapshot_audit(quality)
     idle_ms = quality_reviewer_idle(quality)
     accepted, acceptance_reason = quality_acceptance(quality) if quality else (None, "quality evidence pending")

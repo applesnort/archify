@@ -14,6 +14,19 @@ from typing import Any, Mapping
 READ_TOOLS = {"cat", "sed", "nl"}
 CLI_PHASES = {"validate", "render", "finalize", "deliver", "check", "browser-check", "visual-check"}
 SHELL_MARKERS = ("&&", "||", ";", "|", ">", "<", "&", "\n", "\r", "<<", "$(", "`")
+OBSERVER_PATH_PLACEHOLDERS = {
+    "<WORKSPACE_PARENT>": "__OBSERVER_WORKSPACE_PARENT__",
+    "<WORKSPACE>": "__OBSERVER_WORKSPACE__",
+    "<HOME>": "__OBSERVER_HOME__",
+    "<TMP_PATH>": "__OBSERVER_TMP_PATH__",
+}
+
+
+def _normalize_observer_placeholders(command: str) -> str:
+    """Make observer-only redacted paths parseable without changing raw data."""
+    for placeholder, sentinel in OBSERVER_PATH_PLACEHOLDERS.items():
+        command = command.replace(placeholder, sentinel)
+    return command
 
 
 def _unwrap_shell(command: str) -> tuple[list[str] | None, str]:
@@ -44,7 +57,7 @@ def _unwrap_shell(command: str) -> tuple[list[str] | None, str]:
 def classify(command: Any) -> tuple[str, str]:
     if not isinstance(command, str) or not command.strip():
         return "unknown", "missing command"
-    tokens, basis = _unwrap_shell(command)
+    tokens, basis = _unwrap_shell(_normalize_observer_placeholders(command))
     if tokens is None:
         return "unknown", basis
     executable = pathlib.Path(tokens[0]).name.lower()

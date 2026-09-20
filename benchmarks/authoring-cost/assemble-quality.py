@@ -13,6 +13,22 @@ def read(path: Path) -> Any:
         return {}
 
 
+def read_review(directory: Path) -> tuple[Mapping[str, Any], str | None]:
+    """Prefer a valid adjudicated receipt while retaining the original fallback."""
+    for relative in (
+        Path("independent-review/adjudicated-review.json"),
+        Path("independent-review/review.json"),
+        Path("review.json"),
+    ):
+        path = directory / relative
+        if not path.exists():
+            continue
+        value = read(path)
+        if isinstance(value, Mapping):
+            return value, relative.as_posix()
+    return {}, None
+
+
 def _checks(machine: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     checks = machine.get("checks", [])
     return [check for check in checks if isinstance(check, Mapping)] if isinstance(checks, list) else []
@@ -102,7 +118,7 @@ def _duration_sum(checks: list[Mapping[str, Any]]) -> float | None:
 
 
 def assemble_run(directory: Path, sessions: Path) -> dict[str, Any] | None:
-    review = read(directory / "independent-review/review.json")
+    review, review_path = read_review(directory)
     machine = read(directory / "machine-review/report.json")
     summary = read(directory / "summary.json")
     if not all(isinstance(value, Mapping) and value for value in (review, machine, summary)):
@@ -156,7 +172,7 @@ def assemble_run(directory: Path, sessions: Path) -> dict[str, Any] | None:
         review_duration_ms=review.get("duration_ms"),
         final_machine_duration_ms=_duration_sum(final),
         first_snapshot_audit_ms=_duration_sum(first),
-        independent_review_path="independent-review/review.json",
+        independent_review_path=review_path,
     )
     (directory / "quality.json").write_text(json.dumps(quality, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {"run_id": directory.name, "status": quality["status"], "native": native, "common": common, "repairs": repairs}

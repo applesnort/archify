@@ -85,6 +85,21 @@ class AssembleQualityTests(unittest.TestCase):
             self.assertEqual(quality["status"], "passed")
             self.assertFalse((sessions / evidence.name / "diagram.delivery.json").exists())
 
+    def test_adjudicated_review_receipt_is_authoritative(self):
+        with tempfile.TemporaryDirectory() as temp:
+            evidence, sessions = self._case(Path(temp))
+            (evidence / "independent-review/adjudicated-review.json").write_text(json.dumps({
+                "status": "passed",
+                "semantic": {"status": "passed"},
+                "visual": {"status": "passed"},
+                "duration_ms": 42,
+                "reviewed_at_utc": "2026-09-20T07:00:42Z",
+            }))
+            assemble.assemble_run(evidence, sessions)
+            quality = json.loads((evidence / "quality.json").read_text())
+            self.assertEqual(quality["review_duration_ms"], 42)
+            self.assertEqual(quality["independent_review_path"], "independent-review/adjudicated-review.json")
+
     def test_missing_common_capture_cannot_pass(self):
         with tempfile.TemporaryDirectory() as temp:
             evidence, sessions = self._case(Path(temp), common_captures=False)

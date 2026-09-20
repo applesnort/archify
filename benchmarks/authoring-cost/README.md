@@ -124,3 +124,11 @@ computes `median(C) / median(baseline) - 1`, then averages the three task-relati
 changes with equal weights. An incomplete task matrix leaves the aggregate
 null; it does not silently drop an unaccepted baseline. Process-only comparisons
 include failed runs and are explicitly not accepted delivery comparisons.
+
+If a source interpretation needs independent adjudication, retain the original
+`independent-review/review.json` and the separate adjudication receipt. Write an
+explicit `independent-review/adjudicated-review.json` only after resolving the
+claim against the unchanged artifact and source. Both assembler and summarizer
+prefer that receipt, include its combined measured review work, and use its last
+review completion timestamp. Unmeasured coordinator preparation remains null.
+The study's sirv B third repetition uses this path; the artifact was not edited.

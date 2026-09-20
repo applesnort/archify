@@ -37,6 +37,14 @@ class AnnotateTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(annotate.classify(command)[0], "unknown")
 
+    def test_observer_path_placeholders_do_not_hide_real_compounds(self):
+        finalize = "/bin/zsh -lc 'node bin/archify.mjs finalize architecture <WORKSPACE>/candidate.json <WORKSPACE>/diagram.html --repo-root <WORKSPACE>/source --quality showcase --json'"
+        self.assertEqual(annotate.classify(finalize)[0], "combined_pipeline")
+        redirected = finalize[:-1] + " > <WORKSPACE>/finalize.json'"
+        self.assertEqual(annotate.classify(redirected)[0], "unknown")
+        redacted = "/bin/zsh -lc 'node bin/archify.mjs finalize <REDACTED> <WORKSPACE>/diagram.html'"
+        self.assertEqual(annotate.classify(redacted)[0], "unknown")
+
     def test_only_conservative_simple_reads_are_labeled(self):
         self.assertEqual(annotate.classify("/bin/zsh -lc 'cat archify/SKILL.md'")[0], "run_setup")
         self.assertEqual(annotate.classify("/bin/zsh -lc 'sed -n 1,20p source/index.js'")[0], "evidence_read")

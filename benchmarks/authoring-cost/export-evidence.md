@@ -32,6 +32,6 @@ Run after author sessions and independent checks finish:
       --sessions /private/tmp/archify-authoring-sessions-20260920 \
       --evidence /private/tmp/archify-authoring-20260920-evidence
 
-The current implementation has only been statically checked during the live
-authoring period; do not run this command until the parent task schedules the
-export.
+The retained study exported all 36 registered attempts after author completion.
+A small fixture verified identical repeated export and rejection of a broken
+symlink; exported bytes were independently checked against the index.
