@@ -68,7 +68,9 @@
     "raw_logs": "external private evidence root, excluded from git; reasoning events discarded before persistence",
     "host_chrome": "same Chrome wrapper --no-sandbox inside external seatbelt; crash reporter disabled; deterministic checks unchanged",
     "network": "same inherited network policy; no extra providers",
-    "cache": "new session each run; OS/provider caches uncontrolled, observed usage reported"
+    "cache": "new session each run; OS/provider caches uncontrolled, observed usage reported",
+    "environment_revision": 2,
+    "shell_tmp": "TMPPREFIX=<workspace>/tmp/zsh; positive heredoc and negative private-read preflight required"
   },
   "analysis": {
     "pairing": "per task C/A and C/B; equal task weights, median/range and all samples; no reliable P95/noninferiority claims",
@@ -378,5 +380,14 @@
       "repeat": 3
     }
   ],
-  "catalog_sha256": "536e224f362f13fc48b9c5a8e63c9172cfeb700a41a09ee0e6aebba766de429c"
+  "catalog_sha256": "536e224f362f13fc48b9c5a8e63c9172cfeb700a41a09ee0e6aebba766de429c",
+  "protocol_amendments": [
+    {
+      "after_run": "dev-01-A",
+      "reason": "zsh heredoc ignores TMPDIR alone; outer sandbox denied /tmp/zsh temporary file",
+      "change": "set TMPPREFIX to private workspace tmp for all subsequent runs",
+      "reproduction": "original exit1; TMPPREFIX exit0 with HEREDOC_OK",
+      "disposition": "retain dev-01-A as environment-affected exploratory sample; no replacement; no latency attribution from this pair; heldout not started"
+    }
+  ]
 }

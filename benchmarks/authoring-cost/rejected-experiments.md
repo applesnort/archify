@@ -12,3 +12,7 @@
 - Chrome 嵌套 sandbox 初始化失败。保留外层访问隔离，统一使用关闭 Chrome 内层 sandbox 的启动包装；四个 finalize gates 预检通过。此调整应用 A/B/C，质量检查未变。
 
 正式实验结果及产品候选裁决待实际运行后追加。
+
+## 开发首样本的环境影响
+
+`dev-01-A` 的 zsh heredoc 在外层 sandbox 下无法建立默认临时文件。独立复现：仅 TMPDIR 时 exit 1；另设 TMPPREFIX 到隔离工作区后 exit 0。该样本保留并计入 36 次，不替换，不将其时延差异归因于产品；后续组统一使用修正环境，holdout 尚未开始。环境修正不改变产品代码或质量门槛。

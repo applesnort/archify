@@ -57,19 +57,22 @@ def prepare(manifest, run_id, sessions, evidence):
               'if still failing, retain the candidate and report the actual failure.\n')
     (private/'prompt.txt').write_text(prompt)
     cfg = manifest['model']
+    config_identity = {'model':cfg,'limits':manifest['limits'],'isolation':manifest['isolation'],'observer_sha256':sha(HERE/'observe.py'),'runner_sha256':sha(pathlib.Path(__file__))}
     args = ['/usr/bin/sandbox-exec','-f',str(root/'sandbox.sb'),'/opt/homebrew/bin/codex','exec',
             '--ignore-user-config','--ignore-rules','--skip-git-repo-check','--ephemeral','--json',
             '--sandbox','danger-full-access','-m',cfg['requested_model'],'-c',
             'model_reasoning_effort='+json.dumps(cfg['reasoning_effort']),'-C',str(root),'-']
     env = dict(os.environ, HOME=str(home), CODEX_HOME=str(auth), TMPDIR=str(tmp),
-               PATH=NODE_BIN+':/opt/homebrew/bin:/usr/bin:/bin', ARCHIFY_CHROME=str(chrome))
+               TMPPREFIX=str(tmp/'zsh'), PATH=NODE_BIN+':/opt/homebrew/bin:/usr/bin:/bin', ARCHIFY_CHROME=str(chrome))
     # Prove the deny boundary before any paid author invocation.
     canary = evidence/'isolation-canary.txt'; canary.write_text('private evaluation material')
     check=subprocess.run(args[:3]+['/bin/cat',str(canary)],cwd=root,env=env,capture_output=True)
     if check.returncode == 0: raise ValueError('Scoring material readable inside sandbox')
+    positive=subprocess.run(args[:3]+['/bin/zsh','-lc',"cat <<'ARCHIFY_PREFLIGHT'\nHEREDOC_OK\nARCHIFY_PREFLIGHT"],cwd=root,env=env,capture_output=True,text=True)
+    if positive.returncode or positive.stdout.strip()!='HEREDOC_OK': raise ValueError('Isolated shell heredoc preflight failed')
     meta={**spec,'variant_sha':variant['sha'],'target_repo_sha':case['target_repo_sha'],
-          'cohort':case['cohort'],'attempt':1,'config_hash':hashlib.sha256(json.dumps(cfg,sort_keys=True).encode()).hexdigest(),
-          'model':cfg,'package_sha256':variant['package_sha256'],'prompt_sha256':sha(private/'prompt.txt'),
+          'cohort':case['cohort'],'attempt':1,'config_hash':hashlib.sha256(json.dumps(config_identity,sort_keys=True).encode()).hexdigest(),
+          'model':cfg,'config_identity':config_identity,'package_sha256':variant['package_sha256'],'prompt_sha256':sha(private/'prompt.txt'),
           'workspace':str(root),'isolation':{'canary_read_exit':check.returncode,'policy_sha256':sha(root/'sandbox.sb')},
           'fresh_session':True,'tool_index':'none','os_filesystem_cache':'uncontrolled; warmed by setup',
           'provider_cache':'uncontrolled; report observed usage','command':args}
