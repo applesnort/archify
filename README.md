@@ -106,7 +106,11 @@ One user started with a hand-drawn multi-agent architecture, turned it into an i
 
 Another user turned a Shanghai CityWalk guide into a four-day itinerary: switch between days, inspect a stop, and jump to Amap, Xiaohongshu, or Dianping. The author also added arrival check-ins and stop notes, turning the itinerary into a small tool to use during the trip. These extensions were added by the community author for this particular artifact.
 
+**[▶ Explore the interactive Shanghai CityWalk](https://tt-a1i.github.io/archify/cases/community/shanghai-citywalk.html)**
+
 [![A community-created four-day Shanghai CityWalk itinerary](docs/assets/community/shanghai-citywalk.png)](https://tt-a1i.github.io/archify/cases/community/shanghai-citywalk.html)
+
+**[▶ Try the interactive version](https://tt-a1i.github.io/archify/cases/community/shanghai-citywalk.html)** · Switch between D1–D4 and click a place to explore.
 
 <sub>Community artifact · Shanghai CityWalk · Four days of routes and place links</sub>
 
