@@ -1,8 +1,8 @@
 <p align="center"><strong>English</strong> · <a href="./README_ZH.md">简体中文</a></p>
 
-<p align="center"><img src="docs/assets/archify-readme-hero.png" alt="Archify — interactive diagrams" width="960" /></p>
+<p align="center"><img src="docs/assets/archify-mark.svg" alt="Archify" width="160" height="144" /></p>
 
-# Archify
+<h1 align="center">Archify</h1>
 <h3 align="center">Turn code, ideas, and workflows into diagrams you can explore and share.</h3>
 
 <p align="center">Describe a system in your favorite AI agent, or ask it to read a repository. Archify creates a self-contained interactive HTML diagram: explore details, follow a request, walk through a story, and share the whole artifact.</p>
@@ -123,6 +123,8 @@ The output is a self-contained HTML file. Download it and open it in your browse
 
 <details>
 <summary>Themes, exports, and share cards</summary>
+
+<p align="center"><img src="docs/assets/archify-readme-hero.png" alt="Archify — interactive diagrams" width="960" /></p>
 
 Same diagram, two themes, one click to switch:
 

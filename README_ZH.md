@@ -1,8 +1,8 @@
 <p align="center"><a href="./README.md">English</a> · <strong>简体中文</strong></p>
 
-<p align="center"><img src="docs/assets/archify-readme-hero.png" alt="Archify — interactive diagrams" width="960" /></p>
+<p align="center"><img src="docs/assets/archify-mark.svg" alt="Archify" width="160" height="144" /></p>
 
-# Archify
+<h1 align="center">Archify</h1>
 <h3 align="center">把代码、想法和流程，变成可以探索、讲解和分享的图。</h3>
 
 <p align="center">在你熟悉的 AI Agent 中描述需求，或让它阅读代码仓库。Archify 生成独立的交互式 HTML：点击查看细节、追踪关键路径、逐步讲解，再把完整成品分享给别人。</p>
@@ -123,6 +123,8 @@ Archify 追踪 [`mco-org/mco`](https://github.com/mco-org/mco) 的 `9f1a1cf` 版
 
 <details>
 <summary>深浅主题、导出菜单与分享卡片</summary>
+
+<p align="center"><img src="docs/assets/archify-readme-hero.png" alt="Archify — interactive diagrams" width="960" /></p>
 
 同一张图，两套主题，一键切换：
 
