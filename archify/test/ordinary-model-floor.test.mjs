@@ -930,13 +930,14 @@ test('packaged skill puts a bounded ordinary-model path before progressive featu
     'A non-zero exit is never success',
     'Do not read `bin/` implementation',
     'not prose coordinate exploration or whole-candidate replacement',
-    'validate <type>',
+    'After the edit, rerun the complete `finalize` command from step 4 once',
   ]) {
     assert.match(
       skill.slice(fastPath, fastPathEnd),
       new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
     );
   }
+  assert.doesNotMatch(skill.slice(fastPath, fastPathEnd), /Then run exactly one `validate/);
   assert.match(skill.slice(fastPath, fastPathEnd), /references\/authoring-defaults\.md/);
   assert.match(skill, /real system determine the number of nodes and relationships/i);
   assert.match(skill, /Never use node, relationship, source-reference, view, card, or boundary counts as an authoring target/i);
