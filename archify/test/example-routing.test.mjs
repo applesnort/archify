@@ -13,9 +13,9 @@ const reference = fs.readFileSync(path.join(root, 'references/repository-authori
 test('repository Architecture routes before example loading through one canonical selection', () => {
   const router = skill.slice(skill.indexOf('## Type router'), skill.indexOf('## Mermaid input'));
   const architectureRow = router.split('\n').find((line) => line.startsWith('| `architecture`'));
-  assert.match(architectureRow, /Systems\/services \(including CLI servers\): `examples\/web-app\.architecture\.json`/);
-  assert.match(architectureRow, /library\/API or CLI data processing: `examples\/source-to-diagram\/source-to-diagram\.architecture\.json`/);
-  assert.match(architectureRow, /deployment: `examples\/production-deployment\.architecture\.json`/);
+  assert.match(architectureRow, /System descriptions\/services \(including CLI servers\): `examples\/web-app\.architecture\.json`/);
+  assert.match(architectureRow, /library\/API or CLI data processing repos: `examples\/source-to-diagram\/source-to-diagram\.architecture\.json`/);
+  assert.match(architectureRow, /deployment repos: `examples\/production-deployment\.architecture\.json`/);
   assert.match(skill, /select the matching showcase example in the Type router before loading it/);
   assert.match(reference, /Read another example when a necessary\s+capability remains unexplained/);
   assert.match(reference, /\.\.\/SKILL\.md#type-router/);

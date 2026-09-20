@@ -52,7 +52,7 @@ Do not read `bin/` implementation, renderer or validator source, tests, or bench
 
 | Type | Use for | Schema | Example |
 |---|---|---|---|
-| `architecture` | Components, services, cloud/security boundaries, infrastructure | `schemas/architecture.schema.json` | Systems/services (including CLI servers): `examples/web-app.architecture.json`; library/API or CLI data processing: `examples/source-to-diagram/source-to-diagram.architecture.json`; deployment: `examples/production-deployment.architecture.json` |
+| `architecture` | Components, services, cloud/security boundaries, infrastructure | `schemas/architecture.schema.json` | System descriptions/services (including CLI servers): `examples/web-app.architecture.json`; library/API or CLI data processing repos: `examples/source-to-diagram/source-to-diagram.architecture.json`; deployment repos: `examples/production-deployment.architecture.json` |
 | `workflow` | Processes, approval gates, tool calls, runbooks, CI/CD | `schemas/workflow.schema.json` | `examples/starter.workflow.json` |
 | `sequence` | API call chains, request lifecycles, async traces, returns | `schemas/sequence.schema.json` | `examples/cache-miss-request.sequence.json` |
 | `dataflow` | Pipelines, ETL/ELT, lineage, governance, consumers | `schemas/dataflow.schema.json` | `examples/product-analytics.dataflow.json` |
