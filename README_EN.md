@@ -50,6 +50,8 @@
 
 ### Install, then describe your idea
 
+Works with Cursor, Claude Code, Codex CLI, and OpenCode. See installation options below for additional integrations.
+
 ```bash
 npx skills add tt-a1i/archify -g
 ```
