@@ -2,7 +2,7 @@
   "schema_version": 1,
   "study_id": "authoring-cost-20260920",
   "registered_at": "2026-09-20T04:58:04.268241+00:00",
-  "status": "A/B registered; C SHA must be frozen before C author runs",
+  "status": "C product frozen; regression and development C pending; holdout not begun",
   "variants": {
     "A": {
       "sha": "72c750bb070d95171dbb2244e5b62b1b7da69c12",
@@ -17,11 +17,11 @@
       "package_sha256": "5408149ccf8f3361515abfe0024b3782068f37fb8fe0e790d5571dcf9ad6d60d"
     },
     "C": {
-      "sha": null,
+      "sha": "e85fda53106a0804df182613ed11c9d44c063888",
       "role": "candidate",
       "branch": "codex/authoring-cost-20260920",
-      "package_path": null,
-      "package_sha256": null
+      "package_path": "/private/tmp/archify-authoring-20260920-evidence/C.zip",
+      "package_sha256": "efd72d86fa2504bd0515cee2382dd7f312a7ee0b4992edac3f3ae5ab0424a29e"
     }
   },
   "model": {
@@ -388,6 +388,11 @@
       "change": "set TMPPREFIX to private workspace tmp for all subsequent runs",
       "reproduction": "original exit1; TMPPREFIX exit0 with HEREDOC_OK",
       "disposition": "retain dev-01-A as environment-affected exploratory sample; no replacement; no latency attribution from this pair; heldout not started"
+    },
+    {
+      "after_run": "dev-02-B",
+      "change": "record setup wall duration in run-setup.json for all subsequent runs; observational only",
+      "disposition": "earlier setup durations unknown; report observed author/review subtotals and do not fabricate full totals"
     }
   ]
 }

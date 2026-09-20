@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Prepare a fresh packaged-skill author session; collect outside its read boundary."""
-import argparse, hashlib, json, os, pathlib, shutil, subprocess, sys, zipfile
+import argparse, datetime, hashlib, json, os, pathlib, shutil, subprocess, sys, time, zipfile
 HERE = pathlib.Path(__file__).resolve().parent
 NODE_BIN = '/opt/homebrew/opt/node@22/bin'
 CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -83,7 +83,10 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--manifest',type=pathlib.Path,required=True)
     p.add_argument('--run-id',required=True);p.add_argument('--sessions',type=pathlib.Path,required=True)
     p.add_argument('--evidence',type=pathlib.Path,required=True);p.add_argument('--prepare-only',action='store_true')
-    a=p.parse_args();m=json.loads(a.manifest.read_text());root,private,args,env=prepare(m,a.run_id,a.sessions,a.evidence)
+    a=p.parse_args();m=json.loads(a.manifest.read_text())
+    setup_start=time.monotonic();setup_utc=datetime.datetime.now(datetime.timezone.utc).isoformat()
+    root,private,args,env=prepare(m,a.run_id,a.sessions,a.evidence)
+    (private/'run-setup.json').write_text(json.dumps({'run_id':a.run_id,'phase':'run_setup','start_utc':setup_utc,'duration_ms':1000*(time.monotonic()-setup_start),'timing_source':'runner monotonic','scope':'package extraction, isolated home, source clone, sandbox and shell preflight'},indent=2)+'\n')
     print(json.dumps({'run_id':a.run_id,'workspace':str(root),'evidence':str(private)}),flush=True)
     if a.prepare_only:return
     cmd=[sys.executable,str(HERE/'observe.py'),'--run-dir',str(private),'--workspace',str(root),

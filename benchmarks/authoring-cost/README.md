@@ -23,3 +23,35 @@ Only the ordinary prompt, selected packaged Skill, target source, and common exe
 The first observed complete JSON and all subsequent versions are preserved. Completion requires independent source entailment, full requested semantic coverage, native acceptance and common validation, and actual visual review. A quick first JSON, CLI exit zero, or correct citation line existence alone does not satisfy that definition. Evaluation time is recorded separately and included when discussing total accepted delivery cost. First-pass quality is evaluated on the first complete snapshot, not the final repaired candidate.
 
 Raw events, screenshots, authentication homes and original artifacts remain outside this repository. Checked-in reports contain redacted indices, hashes and derived observations. The runner does not install or update any live Skill and never merges or pushes branches.
+
+## Review and reporting
+
+After the author terminates, `verify-run.py` checks its frozen candidate and
+artifact with the common B package and captures the registered viewports.
+It also diagnoses the first complete snapshot. A common rerender never upgrades
+a failed native delivery. Independent source and actual image review writes
+`quality.json` with `native_acceptance`, `common_acceptance`, `semantic.status`,
+`visual.status`, `first_candidate.status`, and audited `repair_edits`.
+
+Timing fields are `final_machine_duration_ms`, `review_duration_ms`, and the
+separate `first_snapshot_audit_ms`. The runner records setup in `run-setup.json`;
+the first three development attempts lack this measurement and retain nulls.
+The summarizer's `accepted_total_ms` is the sum of measured setup, author,
+final machine verification, and independent review work when every gate passes.
+It is an active-work cost, not continuous dispatch-to-acceptance wall time:
+reviewer queue delays and shared/unallocated adjudication time are disclosed
+separately. Missing components never become zero. Failed outputs retain their
+process timing but have no successful delivery latency.
+
+Run `summarize.py --manifest <manifest> --evidence <private-output> --output
+<report-output>` to emit all registered rows, per-case comparisons, and a local
+timeline. Optional `annotate.py --spans <spans.jsonl> --output
+<annotated-spans.jsonl>` labels only recognizable simple commands; compound
+commands remain unclassified and raw events are unchanged.
+
+`fixed-json.py --manifest <manifest> --candidate <json> --repo-root <source>
+--output <new-directory> --chrome <executable>` compares the same supported
+validate/deliver/strict-check/visual-check pipeline on A/B/C. It retains one
+warmup and three balanced repetitions, including failures. Run it without
+concurrent author or regression workloads. It is separate from the ordinary
+author's native CLI path and from semantic/perceptual acceptance.
