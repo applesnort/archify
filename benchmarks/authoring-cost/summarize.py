@@ -265,11 +265,139 @@ def equal_task_comparisons(groups: list[dict[str, Any]], tasks: list[Mapping[str
 def write_timeline(output: pathlib.Path, timeline: list[dict[str, Any]]) -> None:
     payload = json.dumps(timeline, ensure_ascii=False).replace("<", "\\u003c")
     page = '''<!doctype html><meta charset="utf-8"><title>Archify authoring timeline</title>
-<style>body{font:15px system-ui;margin:30px;max-width:1400px;background:#f7f8fa;color:#16202a}select{padding:8px;width:70%}pre{white-space:pre-wrap;background:white;padding:16px}#chart{background:white;padding:16px}.row{display:grid;grid-template-columns:190px 1fr;gap:12px;margin:8px 0}.rail{position:relative;height:24px;background:#edf0f4}.bar{position:absolute;height:22px;background:#287dc0;min-width:2px;border-radius:3px}small{color:#536170}</style>
-<h1>Authoring event timeline</h1><p>Observed command intervals and native receipt timings are separate. Blank space is unclassified host/model wait; overlapping bars are concurrent.</p>
-<select id="pick"></select><pre id="summary"></pre><div id="chart"></div><pre id="detail">Select a bar for its observed command.</pre><script>
-const runs=PAYLOAD;const pick=document.querySelector('#pick');runs.forEach((x,i)=>{let o=document.createElement('option');o.value=i;o.textContent=x.run.run_id+' · '+x.run.registered_status+' · '+x.run.quality_status;pick.append(o)});
-function draw(){const x=runs[pick.value];if(!x)return;document.querySelector('#summary').textContent=JSON.stringify(x.run,null,2);const chart=document.querySelector('#chart');chart.replaceChildren();const spans=x.spans.filter(s=>s.start&&s.end&&s.duration_ms!==null);if(!spans.length){chart.textContent='No observed completed spans for this attempt.';return}const dates=spans.flatMap(s=>[Date.parse(s.start),Date.parse(s.end)]);const first=Math.min(...dates);const last=Math.max(...dates);const total=Math.max(1,last-first);for(const s of spans){const row=document.createElement('div');row.className='row';const label=document.createElement('small');label.textContent=(s.annotated_phase||s.phase||'unknown')+' · '+(s.duration_ms??'?')+' ms';const rail=document.createElement('div');rail.className='rail';const bar=document.createElement('button');bar.className='bar';bar.style.left=100*(Date.parse(s.start)-first)/total+'%';bar.style.width=100*(Date.parse(s.end)-Date.parse(s.start))/total+'%';bar.title=s.command||s.event||'';bar.onclick=()=>document.querySelector('#detail').textContent=JSON.stringify(s,null,2);rail.append(bar);row.append(label,rail);chart.append(row)}}pick.onchange=draw;draw();</script>'''.replace("PAYLOAD", payload)
+<style>
+body{font:15px system-ui;margin:30px;max-width:1400px;background:#f7f8fa;color:#16202a}
+select{padding:8px;width:70%}
+pre{white-space:pre-wrap;background:white;padding:16px}
+#brief,#chart,#detail{background:white;padding:16px}
+#brief{margin:12px 0;font-weight:600}
+.row{display:grid;grid-template-columns:190px 1fr;gap:12px;margin:8px 0}
+.rail{position:relative;height:24px;background:#edf0f4}
+.bar{position:absolute;height:22px;background:#287dc0;min-width:2px;border-radius:3px;border:0}
+.marker{position:absolute;top:-4px;height:32px;border-left:2px solid #c23b57;z-index:2}
+.marker-label{position:absolute;top:-22px;left:4px;color:#c23b57;white-space:nowrap;font-size:12px}
+small{color:#536170}
+</style>
+<h1>Authoring event timeline</h1>
+<p>Observed command intervals and native receipt timings are separate. Blank space is unclassified waiting or host overhead; no internal function phase is inferred. Overlapping bars remain visible.</p>
+<select id="pick"></select>
+<div id="brief"></div>
+<div id="chart"></div>
+<pre id="detail">Select a bar for its observed command.</pre>
+<details open><summary>Full run summary</summary><pre id="summary"></pre></details>
+<script>
+const runs = __PAYLOAD__;
+const pick = document.querySelector('#pick');
+const brief = document.querySelector('#brief');
+const chart = document.querySelector('#chart');
+const summary = document.querySelector('#summary');
+const detail = document.querySelector('#detail');
+
+for (const [index, item] of runs.entries()) {
+  const option = document.createElement('option');
+  option.value = index;
+  option.textContent = `${item.run.run_id} · ${item.run.registered_status} · ${item.run.quality_status}`;
+  pick.append(option);
+}
+
+function dateMs(value) {
+  const parsed = Date.parse(value || '');
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function spanRecords(item) {
+  return item.spans
+    .map((span) => ({
+      source: span,
+      start: dateMs(span.start),
+      end: dateMs(span.end),
+    }))
+    .filter((span) => span.start !== null && span.end !== null && span.end >= span.start);
+}
+
+function appendAxisMarker(axisRail, markerTime, axisStart, total) {
+  if (markerTime === null) return;
+  const marker = document.createElement('div');
+  marker.className = 'marker';
+  marker.style.left = `${Math.max(0, Math.min(100, 100 * (markerTime - axisStart) / total))}%`;
+  const label = document.createElement('span');
+  label.className = 'marker-label';
+  label.textContent = 'first complete candidate';
+  marker.append(label);
+  axisRail.append(marker);
+}
+
+function draw() {
+  const item = runs[Number(pick.value)];
+  if (!item) return;
+  const run = item.run;
+  const spans = spanRecords(item);
+  const spanTimes = spans.flatMap((span) => [span.start, span.end]);
+  const fallbackStart = spanTimes.length ? Math.min(...spanTimes) : null;
+  const fallbackEnd = spanTimes.length ? Math.max(...spanTimes) : null;
+  const processStart = dateMs(run.process_started_observed_utc) ?? fallbackStart;
+  const processEnd = dateMs(run.process_exit_observed_utc) ?? fallbackEnd;
+  const validAxis = processStart !== null && processEnd !== null && processEnd >= processStart;
+  const axisStart = validAxis ? processStart : fallbackStart;
+  const axisEnd = validAxis ? processEnd : fallbackEnd;
+  const total = axisStart !== null && axisEnd !== null ? Math.max(1, axisEnd - axisStart) : 1;
+  const firstComplete = typeof run.first_complete_ms === 'number' && Number.isFinite(run.first_complete_ms) && axisStart !== null
+    ? axisStart + run.first_complete_ms
+    : null;
+
+  const authorMs = run.process_execution_ms ?? 'unknown';
+  const firstMs = run.first_complete_ms ?? 'unknown';
+  const accepted = run.accepted_status ?? 'unknown';
+  brief.textContent = `Author process: ${authorMs} ms · First complete candidate: ${firstMs} ms · Acceptance: ${accepted}`;
+  summary.textContent = JSON.stringify(run, null, 2);
+  chart.replaceChildren();
+
+  if (axisStart === null || axisEnd === null) {
+    chart.textContent = 'No usable author or observed span timestamps for this attempt.';
+    return;
+  }
+
+  const axisRow = document.createElement('div');
+  axisRow.className = 'row';
+  const axisLabel = document.createElement('small');
+  axisLabel.textContent = 'author process window';
+  const axisRail = document.createElement('div');
+  axisRail.className = 'rail';
+  appendAxisMarker(axisRail, firstComplete, axisStart, total);
+  axisRow.append(axisLabel, axisRail);
+  chart.append(axisRow);
+
+  if (!spans.length) {
+    const empty = document.createElement('p');
+    empty.textContent = 'No observed completed spans for this attempt.';
+    chart.append(empty);
+    return;
+  }
+
+  for (const span of spans) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const label = document.createElement('small');
+    label.textContent = `${span.source.annotated_phase || span.source.phase || 'unknown'} · ${span.source.duration_ms ?? '?'} ms`;
+    const rail = document.createElement('div');
+    rail.className = 'rail';
+    const bar = document.createElement('button');
+    bar.className = 'bar';
+    const left = Math.max(0, Math.min(100, 100 * (span.start - axisStart) / total));
+    const right = Math.max(left, Math.min(100, 100 * (span.end - axisStart) / total));
+    bar.style.left = `${left}%`;
+    bar.style.width = `${Math.max(0.2, right - left)}%`;
+    bar.title = span.source.command || span.source.event || '';
+    bar.onclick = () => { detail.textContent = JSON.stringify(span.source, null, 2); };
+    rail.append(bar);
+    row.append(label, rail);
+    chart.append(row);
+  }
+}
+
+pick.onchange = draw;
+draw();
+</script>'''.replace("__PAYLOAD__", payload)
     (output / "timeline.html").write_text(page, encoding="utf-8")
 
 
