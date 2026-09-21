@@ -4,9 +4,11 @@
     <img src="docs/assets/archify-lockup-light.svg" alt="Archify" width="440" height="121" />
   </picture>
 </p>
-<h3 align="center">把代码、想法和流程，变成可以探索、讲解和分享的图。</h3>
+<h3 align="center">把你想理解、规划或分享的事，变成可以互动的可视化作品。</h3>
 
-<p align="center">在你熟悉的 AI Agent 中描述需求，或让它阅读代码仓库。Archify 生成独立的交互式 HTML：点击查看细节、追踪关键路径、逐步讲解，再把完整成品分享给别人。</p>
+<p align="center">从一个想法、一个问题或一份计划开始。把它描述给 AI Agent，Archify 就能生成可以探索、修改和分享的交互式 HTML。从旅行行程、知识地图到复杂系统，你都可以继续扩展，做成自己需要的样子。</p>
+
+<p align="center">看看社区正在创造什么，也想想你还能用它做些什么。</p>
 
 <p align="center">
   <a href="https://tt-a1i.github.io/archify/gallery.html"><strong>交互演示</strong></a> &nbsp;·&nbsp;
