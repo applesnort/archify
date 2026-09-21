@@ -266,7 +266,7 @@
 
       function t(key) { return copy[language][key]; }
       function local(recipe) { return Object.assign({}, recipe, recipe[language]); }
-      function normalize(value) { return String(value || '').normalize('NFKC').toLowerCase().replace(/[\\s_]+/g,' ').trim(); }
+      function normalize(value) { return String(value || '').normalize('NFKC').toLowerCase().replace(/[\s_]+/g,' ').trim(); }
       function rank(query) {
         var text = normalize(query);
         return recipes.map(function (recipe,index) {
